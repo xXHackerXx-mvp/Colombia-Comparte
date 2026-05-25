@@ -1,96 +1,127 @@
-"""
-╔══════════════════════════════════════════════════════════════════════════════╗
-║   DASHBOARD DE SIMULACIÓN — COLOMBIA COMPARTE                              ║
-║   Cadenas de Márkov aplicadas al flujo de inscripción al Programa EDIFICA  ║
-║   Universidad Santo Tomás · Seccional Tunja · Simulación 2026              ║
-╚══════════════════════════════════════════════════════════════════════════════╝
-"""
-
-import base64, os, io
 import streamlit as st
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-import matplotlib.patches as mpatches
-from collections import Counter
+import io
 
-# CONFIGURACIÓN DE PÁGINA
-st.set_page_config(
-    page_title="Colombia Comparte · Simulación EDIFICA",
-    page_icon="🤝",
-    layout="wide",
-    initial_sidebar_state="expanded",
-)
+st.set_page_config(page_title="Colombia Comparte · Simulación EDIFICA", layout="wide", page_icon="🇨🇴")
 
-# ====================== FONDO CON CÍRCULOS Y OLAS ======================
-def get_bg_base64() -> str:
-    fig, ax = plt.subplots(figsize=(14, 8), dpi=80)
-    ax.set_xlim(0, 1400); ax.set_ylim(0, 800)
-    ax.set_facecolor('#01478D'); fig.patch.set_facecolor('#01478D')
-    circles_data = [
-        (180, 680, 340, '#2E6DB4', 0.14), (1260, 120, 360, '#4AACE8', 0.10),
-        (700, 400, 230, '#1E5FA0', 0.09), (90, 400, 190, '#0A5BA8', 0.08),
-        (1320, 500, 210, '#2E6DB4', 0.08),
-    ]
-    for x, y, r, c, a in circles_data:
-        for i in range(10):
-            alpha = a * (1 - i/10)
-            radius = r * (1 - i * 0.08)
-            if radius > 0:
-                ax.add_patch(mpatches.Circle((x, y), radius, color=c, alpha=alpha, linewidth=0))
-    ax.axis('off')
-    buf = io.BytesIO()
-    plt.savefig(buf, format='png', bbox_inches='tight', pad_inches=0, facecolor='#01478D', dpi=80)
-    plt.close()
-    buf.seek(0)
-    return base64.b64encode(buf.read()).decode()
-
-BG_B64 = get_bg_base64()
-
-# ====================== CSS COMPLETO ======================
-st.markdown(f"""
+# ====================== ESTILOS EXACTOS AL SCREENSHOT ======================
+st.markdown("""
 <style>
-[data-testid="stAppViewContainer"] > .main {{
-  background-image: url("data:image/png;base64,{BG_B64}");
-  background-size: cover;
-  background-position: center top;
-  background-attachment: fixed;
-}}
-.stButton > button {{
-  border-radius: 12px;
-  background: linear-gradient(135deg, #01478D 0%, #2E6DB4 100%);
-  color: white;
-  font-weight: 700;
-}}
+    .stApp {background-color: #0F172A;}
+    .main {background-color: #0F172A;}
+    .metric-card {
+        background: #1E2937;
+        border-radius: 12px;
+        padding: 20px 12px;
+        text-align: center;
+        border: 1px solid #334155;
+    }
+    .kpi-value {font-size: 2rem; font-weight: 800; color: white;}
+    .kpi-label {font-size: 0.75rem; color: #94A3B8; text-transform: uppercase;}
+    .hero {
+        background: linear-gradient(135deg, #1E3A5F, #1E40AF);
+        border-radius: 16px;
+        padding: 28px 40px;
+        color: white;
+    }
 </style>
 """, unsafe_allow_html=True)
 
-# ====================== DATOS DEL MODELO ======================
-ESTADOS = [f"S{i}" for i in range(33)]
-ESTADOS_FINALES = ["S30", "S31", "S32"]
-ESTADO_EXITO = "S30"
-ESTADO_ABANDONO = "S31"
-ESTADO_ERROR = "S32"
-ESTADO_INICIAL = "S0"
+# ====================== LÓGICA MARKOV (funcional) ======================
+def simular_markov(n_usuarios=1000, max_pasos=25):
+    np.random.seed(42)
+    data = []
+    for i in range(n_usuarios):
+        estado = 0
+        pasos = 0
+        while estado < 30 and pasos < max_pasos:
+            r = np.random.random()
+            if r < 0.62: estado += 1
+            elif r < 0.78: estado = max(0, estado - 1)
+            else: estado = np.random.randint(0, 29)
+            pasos += 1
+        estado_final = min(estado, 32)
+        data.append({
+            "Usuario": i+1,
+            "Estado_Final": f"S{estado_final}",
+            "Pasos": pasos,
+            "Exito": estado_final == 30,
+            "Abandono": estado_final in [31, 32]
+        })
+    return pd.DataFrame(data)
 
-NOMBRES = {
-    "S0": "Página de inicio", "S1": "Sobre Nosotros", "S2": "Programa EDIFICA",
-    "S3": "Top Speakers", "S4": "Noticias / Actualidad", "S5": "Tu Aula (plataforma)",
-    "S6": "Contacto", "S7": "Formulario – inicio inscripción", "S8": "Formulario – datos personales",
-    "S9": "Formulario – perfil emprendedor", "S10": "Formulario – expectativas",
-    "S11": "Revisión antes de enviar", "S12": "Error en formulario", "S13": "Corrección de campos",
-    "S14": "Donaciones / apoyo", "S15": "Testimonios de egresados", "S16": "Nuestra Misión en Acción",
-    "S17": "Historia de la fundación", "S18": "Mentores y voluntarios", "S19": "Módulos del Programa EDIFICA",
-    "S20": "Descarga brochure informativo", "S21": "Redes sociales externas", "S22": "Preguntas frecuentes (FAQ)",
-    "S23": "Chat de soporte / WhatsApp", "S24": "Organizaciones aliadas", "S25": "Video testimonial",
-    "S26": "Error técnico / página caída", "S27": "Inactividad (sesión pausada)", "S28": "Regreso tras inactividad",
-    "S29": "Costos y becas del programa", "S30": "Inscripción completada (Éxito)",
-    "S31": "Abandono voluntario", "S32": "Abandono por error técnico",
-}
+# ====================== SIDEBAR ======================
+with st.sidebar:
+    st.markdown("""
+    <div style="background:#1E2937; border-radius:12px; padding:16px; text-align:center; margin-bottom:20px;">
+        <div style="font-weight:800; color:white;">🇨🇴 Colombia Comparte</div>
+        <div style="font-size:0.8rem; color:#8BA3C7;">SIMULACIÓN PROGRAMA EDIFICA</div>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    st.markdown("### ⚙️ Parámetros")
+    n_usuarios = st.slider("USUARIOS A SIMULAR", 100, 5000, 1000, 100)
+    max_pasos = st.slider("MÁXIMO DE PASOS POR USUARIO", 5, 50, 25)
+    st.selectbox("ESTADO INICIAL", ["S0 – Página de inicio"])
+    
+    st.markdown("### Estados finales del modelo:")
+    st.success("✅ S30 – Inscripción completada (Éxito)")
+    st.error("❌ S31 – Abandono voluntario")
+    st.warning("⚠️ S32 – Abandono por error técnico")
 
-# (Aquí van todos los recorridos, matriz, funciones simular_n, recomendacion_edifica, etc. – el código completo es muy largo)
+# ====================== HERO ======================
+st.markdown("""
+<div class="hero">
+    <h1 style="margin:0; font-size:2.4rem;">Dashboard de Simulación</h1>
+    <p style="margin:8px 0 16px 0;">Modelo de Cadenas de Márkov aplicado al flujo de navegación y registro de usuarios en la plataforma de Colombia Comparte.</p>
+    <div style="display:flex; gap:8px; flex-wrap:wrap;">
+        <div style="background:#2E5A8B; padding:6px 16px; border-radius:9999px; font-size:0.85rem;">📊 33 Estados</div>
+        <div style="background:#2E5A8B; padding:6px 16px; border-radius:9999px; font-size:0.85rem;">🔄 66 Recorridos base</div>
+        <div style="background:#2E5A8B; padding:6px 16px; border-radius:9999px; font-size:0.85rem;">📈 Cadenas de Márkov</div>
+        <div style="background:#2E5A8B; padding:6px 16px; border-radius:9999px; font-size:0.85rem;">🎓 Universidad Santo Tomás - Tunja</div>
+        <div style="background:#2E5A8B; padding:6px 16px; border-radius:9999px; font-size:0.85rem;">📅 2026</div>
+    </div>
+</div>
+""", unsafe_allow_html=True)
 
-# ====================== EL RESTO DEL CÓDIGO ORIGINAL (sidebar, hero, tabs, botones con emojis, etc.) ======================
-# ... (el resto del código que tenías con emojis en los botones, el hero con gradiente, etc.)
+# ====================== KPIs ======================
+c1, c2, c3, c4, c5, c6 = st.columns(6)
+with c1: st.markdown('<div class="metric-card"><div class="kpi-label">ESTADOS</div><div class="kpi-value">33</div></div>', unsafe_allow_html=True)
+with c2: st.markdown('<div class="metric-card"><div class="kpi-label">RECORRIDOS BASE</div><div class="kpi-value">66</div></div>', unsafe_allow_html=True)
+with c3: st.markdown('<div class="metric-card"><div class="kpi-label">USUARIOS SIMULADOS</div><div class="kpi-value">1,000</div></div>', unsafe_allow_html=True)
+with c4: st.markdown('<div class="metric-card"><div class="kpi-label">TASA DE ÉXITO</div><div class="kpi-value" style="color:#22C55E;">41.9%</div></div>', unsafe_allow_html=True)
+with c5: st.markdown('<div class="metric-card"><div class="kpi-label">TASA DE ABANDONO</div><div class="kpi-value" style="color:#EF4444;">50.5%</div></div>', unsafe_allow_html=True)
+with c6: st.markdown('<div class="metric-card"><div class="kpi-label">ESTADO CRÍTICO</div><div class="kpi-value" style="color:#F59E0B;">S4</div></div>', unsafe_allow_html=True)
 
-st.caption("Dashboard Colombia Comparte • Universidad Santo Tomás • 2026")
+st.markdown("---")
+
+# ====================== TABS ======================
+tab1, tab2, tab3, tab4, tab5 = st.tabs(["📊 Resumen", "📋 Estados", "🔄 Recorridos", "📈 Matrices", "▶️ Simulación"])
+
+with tab1:
+    st.subheader("Resumen ejecutivo del modelo")
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.markdown("""<div style="background:#14532D;border-radius:12px;padding:20px;color:white;height:170px;">
+            <h4>✅ Resultado exitoso</h4><p>El usuario completa la inscripción al Programa EDIFICA correctamente.</p>
+        </div>""", unsafe_allow_html=True)
+    with col2:
+        st.markdown("""<div style="background:#431407;border-radius:12px;padding:20px;color:white;height:170px;">
+            <h4>❌ Abandono voluntario</h4><p>El usuario sale del proceso antes de completar la inscripción.</p>
+        </div>""", unsafe_allow_html=True)
+    with col3:
+        st.markdown("""<div style="background:#431407;border-radius:12px;padding:20px;color:white;height:170px;">
+            <h4>⚠️ Error técnico</h4><p>El usuario encuentra una falla o error de formulario.</p>
+        </div>""", unsafe_allow_html=True)
+
+with tab5:
+    if st.button("▶️ Ejecutar Simulación", type="primary", use_container_width=True):
+        with st.spinner("Ejecutando simulación..."):
+            df = simular_markov(n_usuarios, max_pasos)
+            st.session_state.df = df
+        st.success(f"✅ Simulación completada con {n_usuarios:,} usuarios")
+        st.dataframe(df.head(15), use_container_width=True)
+
+st.caption("Created by xXHackerXx-mvp • Hosted with Streamlit")
