@@ -86,14 +86,6 @@ html, body, [class*="css"] {
 .app-header-sub   { font-size: .72rem; color: var(--fg-d); margin-top: 1px; }
 .app-header-right { font-size: .7rem; color: var(--fg-d); text-align: right; }
 
-/* ── params bar ── */
-.params-bar {
-  background: var(--surf); border: 1px solid var(--bord);
-  border-radius: 12px; padding: .85rem 1.25rem;
-  margin-bottom: 1.25rem;
-  box-shadow: 0 1px 4px rgba(20,18,12,.04);
-}
-
 /* ── KPI row ── */
 .kpi-row {
   display: grid; grid-template-columns: repeat(6,1fr);
@@ -298,10 +290,11 @@ STATES = [
     ("S32","Abandono",                "Resultado",  "terminal:abandon"),
     ("S33","Error técnico",           "Resultado",  "terminal:error"),
 ]
-N       = len(STATES)
-IDS     = [s[0] for s in STATES]
-NAMES   = [s[1] for s in STATES]
-IDX     = {s[0]: i for i, s in enumerate(STATES)}
+N        = len(STATES)
+N_STATES = N          # alias used in KPI row and captions
+IDS      = [s[0] for s in STATES]
+NAMES    = [s[1] for s in STATES]
+IDX      = {s[0]: i for i, s in enumerate(STATES)}
 
 def term(i):
     k = STATES[i][3]
@@ -628,18 +621,19 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  PARAMS BAR
+#  PARAMS BAR  (Streamlit native container — HTML wrappers don't work around widgets)
 # ══════════════════════════════════════════════════════════════════════════════
-st.markdown('<div class="params-bar">', unsafe_allow_html=True)
-pc = st.columns([1.8, 1.8, 1, 2, 1.2], gap="medium")
-with pc[0]: n_u  = st.slider("Usuarios a simular", 100, 5000, 1500, 100)
-with pc[1]: m_p  = st.slider("Máximo de pasos", 5, 60, 25)
-with pc[2]: seed = st.number_input("Semilla", 0, 9999, 42, 1)
-with pc[3]: scen = st.selectbox("Escenario",["base","improved"],
-                                format_func=lambda x: "📊 Base (sin mejoras)"
-                                            if x=="base" else "✅ Mejorado (S17 optimizado)")
-with pc[4]: run  = st.button("▶ Ejecutar", type="primary", use_container_width=True)
-st.markdown('</div>', unsafe_allow_html=True)
+with st.container():
+    pc = st.columns([1.8, 1.8, 1, 2, 1.2], gap="medium")
+    with pc[0]: n_u  = st.slider("Usuarios a simular", 100, 5000, 1500, 100)
+    with pc[1]: m_p  = st.slider("Máximo de pasos", 5, 60, 25)
+    with pc[2]: seed = st.number_input("Semilla", 0, 9999, 42, 1)
+    with pc[3]: scen = st.selectbox("Escenario", ["base","improved"],
+                                    format_func=lambda x: "📊 Base (sin mejoras)"
+                                                if x=="base" else "✅ Mejorado (S17 optimizado)")
+    with pc[4]: run  = st.button("▶ Ejecutar", type="primary", use_container_width=True)
+
+st.markdown('<hr class="divider">', unsafe_allow_html=True)
 
 # ══════════════════════════════════════════════════════════════════════════════
 #  RUN
