@@ -36,135 +36,154 @@ WARN = "#E0A23D"
 BORD = "#E3E1DA"
 
 # ── CSS ────────────────────────────────────────────────────────────────────────
-st.markdown(f"""
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+# NOTE: use plain string (no f-string) to avoid Streamlit stripping <style> blocks.
+# Colours are declared as CSS custom properties in :root.
+st.markdown("""
 <style>
-  html, body, [class*="css"] {{
-    font-family: 'IBM Plex Sans', system-ui, sans-serif !important;
-    background: {BG} !important;
-    color: {FG} !important;
-  }}
-  .main .block-container {{
-    background: {BG} !important;
-    padding: 1.5rem 2rem 3rem !important;
-    max-width: 1300px;
-  }}
-  #MainMenu, footer, header {{ visibility: hidden; }}
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap');
 
-  /* background dot-grid */
-  .main::before {{
-    content: '';
-    position: fixed;
-    inset: 0;
-    background-image:
-      linear-gradient(rgba(61,79,224,.04) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(61,79,224,.04) 1px, transparent 1px);
-    background-size: 40px 40px;
-    pointer-events: none;
-    z-index: 0;
-  }}
+:root {
+  --bg:    #FAFAF7;
+  --surf:  #FFFFFF;
+  --surf2: #F4F3EE;
+  --fg:    #14120C;
+  --fg-m:  #5C594F;
+  --fg-d:  #9A968B;
+  --acc:   #3D4FE0;
+  --good:  #1F8A5B;
+  --bad:   #C84B3B;
+  --warn:  #E0A23D;
+  --bord:  #E3E1DA;
+}
 
-  /* ── header ── */
-  .edifica-header {{
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 1.1rem 1.5rem;
-    background: {SURF};
-    border: 1px solid {BORD};
-    border-radius: 12px;
-    margin-bottom: 1.2rem;
-    box-shadow: 0 1px 4px rgba(20,18,12,.06);
-  }}
-  .edifica-header h1 {{
-    font-size: 1.1rem; font-weight: 700; color: {FG}; margin: 0;
-    letter-spacing: -0.01em;
-  }}
-  .edifica-header h1 span {{
-    font-size: .8rem; font-weight: 400; color: {FG_D}; margin-left: .5rem;
-  }}
+html, body, [class*="css"] {
+  font-family: 'IBM Plex Sans', system-ui, sans-serif !important;
+  background: var(--bg) !important;
+  color: var(--fg) !important;
+}
+.main .block-container {
+  background: var(--bg) !important;
+  padding: 1.5rem 2rem 3rem !important;
+  max-width: 1300px;
+}
+#MainMenu, footer, header { visibility: hidden; }
 
-  /* ── KPI row ── */
-  .kpi-row {{
-    display: grid;
-    grid-template-columns: repeat(6, 1fr);
-    gap: .7rem;
-    margin-bottom: 1.2rem;
-  }}
-  .kpi {{
-    background: {SURF};
-    border: 1px solid {BORD};
-    border-radius: 10px;
-    padding: .8rem 1rem;
-    box-shadow: 0 1px 3px rgba(20,18,12,.05);
-  }}
-  .kpi-label {{
-    font-size: .65rem; font-weight: 600; letter-spacing: .06em;
-    text-transform: uppercase; color: {FG_D}; margin-bottom: .3rem;
-  }}
-  .kpi-value {{
-    font-size: 1.5rem; font-weight: 700; line-height: 1; color: {FG};
-    font-family: 'IBM Plex Mono', monospace;
-  }}
-  .kpi-delta {{ font-size: .7rem; margin-top: .25rem; color: {FG_M}; }}
-  .kpi-delta.pos {{ color: {GOOD}; }}
-  .kpi-delta.neg {{ color: {BAD}; }}
+/* background dot-grid */
+.main::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(61,79,224,.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(61,79,224,.04) 1px, transparent 1px);
+  background-size: 40px 40px;
+  pointer-events: none;
+  z-index: 0;
+}
 
-  /* ── cards ── */
-  .card {{
-    background: {SURF};
-    border: 1px solid {BORD};
-    border-radius: 12px;
-    padding: 1rem 1.2rem 1.1rem;
-    box-shadow: 0 1px 4px rgba(20,18,12,.05);
-    margin-bottom: .9rem;
-  }}
-  .card h3 {{
-    font-size: .75rem; font-weight: 600; text-transform: uppercase;
-    letter-spacing: .07em; color: {FG_D}; margin: 0 0 .7rem 0;
-  }}
+/* header */
+.edifica-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.1rem 1.5rem;
+  background: var(--surf);
+  border: 1px solid var(--bord);
+  border-radius: 12px;
+  margin-bottom: 1.2rem;
+  box-shadow: 0 1px 4px rgba(20,18,12,.06);
+}
+.edifica-header h1 {
+  font-size: 1.1rem; font-weight: 700; color: var(--fg); margin: 0;
+  letter-spacing: -0.01em;
+}
+.edifica-header h1 span {
+  font-size: .8rem; font-weight: 400; color: var(--fg-d); margin-left: .5rem;
+}
 
-  /* ── diagnosis ── */
-  .diag-row {{ display: flex; align-items: baseline; gap: .5rem; margin-bottom: .45rem; }}
-  .diag-label {{ font-size: .82rem; color: {FG_M}; }}
-  .diag-val {{ font-size: 1rem; font-weight: 700; color: {FG};
-               font-family: 'IBM Plex Mono', monospace; }}
-  .diag-badge {{
-    display: inline-block; padding: 2px 8px; border-radius: 4px;
-    font-size: .68rem; font-weight: 600; background: #FEF3E2; color: {WARN};
-  }}
+/* KPI row */
+.kpi-row {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: .7rem;
+  margin-bottom: 1.2rem;
+}
+.kpi {
+  background: var(--surf);
+  border: 1px solid var(--bord);
+  border-radius: 10px;
+  padding: .8rem 1rem;
+  box-shadow: 0 1px 3px rgba(20,18,12,.05);
+}
+.kpi-label {
+  font-size: .65rem; font-weight: 600; letter-spacing: .06em;
+  text-transform: uppercase; color: var(--fg-d); margin-bottom: .3rem;
+}
+.kpi-value {
+  font-size: 1.5rem; font-weight: 700; line-height: 1; color: var(--fg);
+  font-family: 'IBM Plex Mono', monospace;
+}
+.kpi-delta { font-size: .7rem; margin-top: .25rem; color: var(--fg-m); }
+.kpi-delta.pos { color: var(--good); }
+.kpi-delta.neg { color: var(--bad);  }
 
-  /* ── buttons ── */
-  .stButton > button {{
-    background: {ACC} !important; color: #fff !important;
-    border: none !important; border-radius: 8px !important;
-    font-weight: 600 !important;
-    font-family: 'IBM Plex Sans', sans-serif !important;
-    padding: .5rem 1.1rem !important;
-  }}
-  .stButton > button:hover {{ background: #2d3ecc !important; }}
+/* cards */
+.card {
+  background: var(--surf);
+  border: 1px solid var(--bord);
+  border-radius: 12px;
+  padding: 1rem 1.2rem 1.1rem;
+  box-shadow: 0 1px 4px rgba(20,18,12,.05);
+  margin-bottom: .9rem;
+}
+.card h3 {
+  font-size: .75rem; font-weight: 600; text-transform: uppercase;
+  letter-spacing: .07em; color: var(--fg-d); margin: 0 0 .7rem 0;
+}
 
-  /* ── form labels ── */
-  .stSlider label, .stNumberInput label, .stSelectbox label {{
-    color: {FG_M} !important; font-size: .8rem !important;
-  }}
+/* diagnosis */
+.diag-row { display: flex; align-items: baseline; gap: .5rem; margin-bottom: .45rem; }
+.diag-label { font-size: .82rem; color: var(--fg-m); }
+.diag-val {
+  font-size: 1rem; font-weight: 700; color: var(--fg);
+  font-family: 'IBM Plex Mono', monospace;
+}
+.diag-badge {
+  display: inline-block; padding: 2px 8px; border-radius: 4px;
+  font-size: .68rem; font-weight: 600; background: #FEF3E2; color: var(--warn);
+}
 
-  /* ── tabs ── */
-  .stTabs [data-baseweb="tab-list"] {{
-    background: {SURF2} !important; border-radius: 8px !important;
-    gap: 2px; padding: 3px;
-  }}
-  .stTabs [data-baseweb="tab"] {{
-    border-radius: 6px !important; font-weight: 600 !important;
-    font-size: .8rem !important; color: {FG_M} !important;
-    padding: .35rem .85rem !important;
-  }}
-  .stTabs [aria-selected="true"] {{
-    background: {SURF} !important; color: {ACC} !important;
-    box-shadow: 0 1px 3px rgba(20,18,12,.1) !important;
-  }}
+/* buttons */
+.stButton > button {
+  background: var(--acc) !important; color: #fff !important;
+  border: none !important; border-radius: 8px !important;
+  font-weight: 600 !important;
+  font-family: 'IBM Plex Sans', sans-serif !important;
+  padding: .5rem 1.1rem !important;
+}
+.stButton > button:hover { background: #2d3ecc !important; }
 
-  hr.edifica {{ border: none; border-top: 1px solid {BORD}; margin: .5rem 0 1rem; }}
+/* form labels */
+.stSlider label, .stNumberInput label, .stSelectbox label {
+  color: var(--fg-m) !important; font-size: .8rem !important;
+}
+
+/* tabs */
+.stTabs [data-baseweb="tab-list"] {
+  background: var(--surf2) !important; border-radius: 8px !important;
+  gap: 2px; padding: 3px;
+}
+.stTabs [data-baseweb="tab"] {
+  border-radius: 6px !important; font-weight: 600 !important;
+  font-size: .8rem !important; color: var(--fg-m) !important;
+  padding: .35rem .85rem !important;
+}
+.stTabs [aria-selected="true"] {
+  background: var(--surf) !important; color: var(--acc) !important;
+  box-shadow: 0 1px 3px rgba(20,18,12,.1) !important;
+}
+
+hr.edifica { border: none; border-top: 1px solid var(--bord); margin: .5rem 0 1rem; }
 </style>
 """, unsafe_allow_html=True)
 
