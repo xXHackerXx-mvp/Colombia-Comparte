@@ -1,785 +1,819 @@
 """
 DASHBOARD DE SIMULACIÓN — COLOMBIA COMPARTE
-Cadenas de Márkov aplicadas al flujo de inscripción al Programa EDIFICA
+Cadenas de Márkov — Programa EDIFICA
 Universidad Santo Tomás · Seccional Tunja · 2026
 """
 
 import streamlit as st
 import pandas as pd
 import numpy as np
+import matplotlib
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+from matplotlib.colors import LinearSegmentedColormap
 import io
-from collections import Counter
+import base64
 
+# ── PAGE CONFIG ────────────────────────────────────────────────────────────────
 st.set_page_config(
-    page_title="Colombia Comparte · Simulación EDIFICA",
-    page_icon="🤝",
+    page_title="EDIFICA · Simulación Markov",
+    page_icon="🏗️",
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="collapsed",
 )
 
-# ══════════════════════════════════════════════════════════════════════════════
-# ESTILOS CSS  (diseño Simulacion Desing)
-# ══════════════════════════════════════════════════════════════════════════════
-st.markdown("""
+# ── COLOURS ────────────────────────────────────────────────────────────────────
+BG   = "#FAFAF7"
+SURF = "#FFFFFF"
+SURF2= "#F4F3EE"
+FG   = "#14120C"
+FG_M = "#5C594F"
+FG_D = "#9A968B"
+ACC  = "#3D4FE0"
+GOOD = "#1F8A5B"
+BAD  = "#C84B3B"
+WARN = "#E0A23D"
+BORD = "#E3E1DA"
+
+# ── CSS ────────────────────────────────────────────────────────────────────────
+st.markdown(f"""
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
-    .main {background: linear-gradient(135deg, #011D42 0%, #01478D 100%);}
-    .hero {
-        background: linear-gradient(135deg, #01478D, #2E6DB4);
-        border-radius: 16px;
-        padding: 40px 30px;
-        margin-bottom: 30px;
-        text-align: center;
-        color: white;
-        box-shadow: 0 10px 30px rgba(0,0,0,0.3);
-    }
-    .hero h1 {font-size: 2.8rem; margin: 0; font-weight: 900;}
-    .hero p  {font-size: 1.1rem; opacity: 0.92; margin-top: 8px;}
-    .stButton > button {
-        border-radius: 12px;
-        font-weight: 700;
-        height: 52px;
-    }
-    .kpi-box {
-        background: rgba(255,255,255,0.08);
-        border: 1px solid rgba(74,172,232,0.35);
-        border-radius: 14px;
-        padding: 18px 14px;
-        text-align: center;
-    }
-    .kpi-label {font-size: 0.72rem; text-transform: uppercase;
-                letter-spacing: 0.08em; color: #9fc8e8; font-weight: 700;}
-    .kpi-value {font-size: 1.9rem; font-weight: 900; color: #FFFFFF; line-height: 1.1;}
-    .kpi-detail{font-size: 0.73rem; color: #7bb8d8; margin-top: 3px;}
-    .diag-box {
-        background: rgba(1,47,101,0.65);
-        border-left: 5px solid #4AACE8;
-        border-radius: 12px;
-        padding: 18px 20px;
-        color: #daeef9;
-        margin: 12px 0 18px 0;
-        line-height: 1.65;
-    }
-    .rec-box {
-        background: rgba(255,255,255,0.06);
-        border: 1px solid rgba(74,172,232,0.28);
-        border-radius: 14px;
-        padding: 20px;
-        color: #e8f4fd;
-        margin-top: 14px;
-        line-height: 1.65;
-    }
-    .rec-box h4 {color:#FFFFFF; margin-top:0; font-size:1rem;}
+  html, body, [class*="css"] {{
+    font-family: 'IBM Plex Sans', system-ui, sans-serif !important;
+    background: {BG} !important;
+    color: {FG} !important;
+  }}
+  .main .block-container {{
+    background: {BG} !important;
+    padding: 1.5rem 2rem 3rem !important;
+    max-width: 1300px;
+  }}
+  #MainMenu, footer, header {{ visibility: hidden; }}
+
+  /* background dot-grid */
+  .main::before {{
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(61,79,224,.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(61,79,224,.04) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }}
+
+  /* ── header ── */
+  .edifica-header {{
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1.1rem 1.5rem;
+    background: {SURF};
+    border: 1px solid {BORD};
+    border-radius: 12px;
+    margin-bottom: 1.2rem;
+    box-shadow: 0 1px 4px rgba(20,18,12,.06);
+  }}
+  .edifica-header h1 {{
+    font-size: 1.1rem; font-weight: 700; color: {FG}; margin: 0;
+    letter-spacing: -0.01em;
+  }}
+  .edifica-header h1 span {{
+    font-size: .8rem; font-weight: 400; color: {FG_D}; margin-left: .5rem;
+  }}
+
+  /* ── KPI row ── */
+  .kpi-row {{
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: .7rem;
+    margin-bottom: 1.2rem;
+  }}
+  .kpi {{
+    background: {SURF};
+    border: 1px solid {BORD};
+    border-radius: 10px;
+    padding: .8rem 1rem;
+    box-shadow: 0 1px 3px rgba(20,18,12,.05);
+  }}
+  .kpi-label {{
+    font-size: .65rem; font-weight: 600; letter-spacing: .06em;
+    text-transform: uppercase; color: {FG_D}; margin-bottom: .3rem;
+  }}
+  .kpi-value {{
+    font-size: 1.5rem; font-weight: 700; line-height: 1; color: {FG};
+    font-family: 'IBM Plex Mono', monospace;
+  }}
+  .kpi-delta {{ font-size: .7rem; margin-top: .25rem; color: {FG_M}; }}
+  .kpi-delta.pos {{ color: {GOOD}; }}
+  .kpi-delta.neg {{ color: {BAD}; }}
+
+  /* ── cards ── */
+  .card {{
+    background: {SURF};
+    border: 1px solid {BORD};
+    border-radius: 12px;
+    padding: 1rem 1.2rem 1.1rem;
+    box-shadow: 0 1px 4px rgba(20,18,12,.05);
+    margin-bottom: .9rem;
+  }}
+  .card h3 {{
+    font-size: .75rem; font-weight: 600; text-transform: uppercase;
+    letter-spacing: .07em; color: {FG_D}; margin: 0 0 .7rem 0;
+  }}
+
+  /* ── diagnosis ── */
+  .diag-row {{ display: flex; align-items: baseline; gap: .5rem; margin-bottom: .45rem; }}
+  .diag-label {{ font-size: .82rem; color: {FG_M}; }}
+  .diag-val {{ font-size: 1rem; font-weight: 700; color: {FG};
+               font-family: 'IBM Plex Mono', monospace; }}
+  .diag-badge {{
+    display: inline-block; padding: 2px 8px; border-radius: 4px;
+    font-size: .68rem; font-weight: 600; background: #FEF3E2; color: {WARN};
+  }}
+
+  /* ── buttons ── */
+  .stButton > button {{
+    background: {ACC} !important; color: #fff !important;
+    border: none !important; border-radius: 8px !important;
+    font-weight: 600 !important;
+    font-family: 'IBM Plex Sans', sans-serif !important;
+    padding: .5rem 1.1rem !important;
+  }}
+  .stButton > button:hover {{ background: #2d3ecc !important; }}
+
+  /* ── form labels ── */
+  .stSlider label, .stNumberInput label, .stSelectbox label {{
+    color: {FG_M} !important; font-size: .8rem !important;
+  }}
+
+  /* ── tabs ── */
+  .stTabs [data-baseweb="tab-list"] {{
+    background: {SURF2} !important; border-radius: 8px !important;
+    gap: 2px; padding: 3px;
+  }}
+  .stTabs [data-baseweb="tab"] {{
+    border-radius: 6px !important; font-weight: 600 !important;
+    font-size: .8rem !important; color: {FG_M} !important;
+    padding: .35rem .85rem !important;
+  }}
+  .stTabs [aria-selected="true"] {{
+    background: {SURF} !important; color: {ACC} !important;
+    box-shadow: 0 1px 3px rgba(20,18,12,.1) !important;
+  }}
+
+  hr.edifica {{ border: none; border-top: 1px solid {BORD}; margin: .5rem 0 1rem; }}
 </style>
 """, unsafe_allow_html=True)
 
 # ══════════════════════════════════════════════════════════════════════════════
-# DATOS DEL MODELO
+#  DATA MODEL
 # ══════════════════════════════════════════════════════════════════════════════
-ESTADOS = [
-    "S0","S1","S2","S3","S4","S5","S6","S7","S8","S9",
-    "S10","S11","S12","S13","S14","S15","S16","S17","S18",
-    "S19","S20","S21","S22","S23","S24","S25","S26","S27",
-    "S28","S29","S30","S31","S32",
+STATES = [
+    ("S01","Landing",                 "Acceso",      "page"),
+    ("S02","Catálogo de programas",   "Acceso",      "page"),
+    ("S03","EDIFICA · Detalle",       "Acceso",      "page"),
+    ("S04","Quiz de elegibilidad",    "Acceso",      "page"),
+    ("S05","Registro · Inicio",       "Registro",    "page"),
+    ("S06","Formulario datos básicos","Registro",    "form"),
+    ("S07","Verificación correo",     "Registro",    "verify"),
+    ("S08","OTP móvil",               "Registro",    "verify"),
+    ("S09","Aceptación T&C",          "Registro",    "form"),
+    ("S10","Login",                   "Registro",    "form"),
+    ("S11","Perfil personal",         "Perfil",      "form"),
+    ("S12","Documento de identidad",  "Perfil",      "upload"),
+    ("S13","Comprobante domicilio",   "Perfil",      "upload"),
+    ("S14","Información educativa",   "Perfil",      "form"),
+    ("S15","Experiencia laboral",     "Perfil",      "form"),
+    ("S16","Idea de negocio",         "Proyecto",    "form"),
+    ("S17","Plan de negocio",         "Proyecto",    "upload"),   # CRITICAL STATE
+    ("S18","Modelo financiero",       "Proyecto",    "upload"),
+    ("S19","Fotos del proyecto",      "Proyecto",    "upload"),
+    ("S20","Pitch en video",          "Proyecto",    "upload"),
+    ("S21","Referencias",             "Proyecto",    "form"),
+    ("S22","Revisión del resumen",    "Envío",       "page"),
+    ("S23","Envío de solicitud",      "Envío",       "action"),
+    ("S24","Confirmación",            "Envío",       "page"),
+    ("S25","Programar entrevista",    "Evaluación",  "form"),
+    ("S26","Entrevista realizada",    "Evaluación",  "action"),
+    ("S27","Decisión",                "Evaluación",  "action"),
+    ("S28","Aceptado",                "Resultado",   "terminal:success"),
+    ("S29","Lista de espera",         "Resultado",   "page"),
+    ("S30","Rechazado",               "Resultado",   "terminal:reject"),
+    ("S31","Reintento de sesión",     "Soporte",     "action"),
+    ("S32","Abandono",                "Resultado",   "terminal:abandon"),
+    ("S33","Error técnico",           "Resultado",   "terminal:error"),
 ]
-ESTADOS_FINALES = ["S30", "S31", "S32"]
-ESTADO_EXITO    = "S30"
-ESTADO_ABANDONO = "S31"
-ESTADO_ERROR    = "S32"
+N_STATES    = len(STATES)
+STATE_IDS   = [s[0] for s in STATES]
+STATE_NAMES = [s[1] for s in STATES]
+STATE_IDX   = {s[0]: i for i, s in enumerate(STATES)}
 
-NOMBRES = {
-    "S0":"Página de inicio","S1":"Sobre Nosotros","S2":"Programa EDIFICA",
-    "S3":"Top Speakers","S4":"Noticias / Actualidad","S5":"Tu Aula (plataforma)",
-    "S6":"Contacto","S7":"Formulario – inicio inscripción",
-    "S8":"Formulario – datos personales","S9":"Formulario – perfil emprendedor",
-    "S10":"Formulario – expectativas","S11":"Revisión antes de enviar",
-    "S12":"Error en formulario","S13":"Corrección de campos",
-    "S14":"Donaciones / apoyo","S15":"Testimonios de egresados",
-    "S16":"Nuestra Misión en Acción","S17":"Historia de la fundación",
-    "S18":"Mentores y voluntarios","S19":"Módulos del Programa EDIFICA",
-    "S20":"Descarga brochure informativo","S21":"Redes sociales externas",
-    "S22":"Preguntas frecuentes (FAQ)","S23":"Chat de soporte / WhatsApp",
-    "S24":"Organizaciones aliadas","S25":"Video testimonial",
-    "S26":"Error técnico / página caída","S27":"Inactividad (sesión pausada)",
-    "S28":"Regreso tras inactividad","S29":"Costos y becas del programa",
-    "S30":"Inscripción completada (Éxito)","S31":"Abandono voluntario",
-    "S32":"Abandono por error técnico",
+def terminal_of(i: int):
+    """Return terminal kind ('success','abandon','reject','error') or None."""
+    kind = STATES[i][3]
+    return kind.split(":")[1] if kind.startswith("terminal:") else None
+
+# Transition table: {from_id: [(to_id, p_base, p_improved|None), …]}
+T_RAW = {
+    "S01": [("S02",0.55,None),("S03",0.20,None),("S04",0.10,None),("S32",0.15,None)],
+    "S02": [("S03",0.65,None),("S01",0.10,None),("S32",0.20,None),("S33",0.05,None)],
+    "S03": [("S04",0.45,None),("S05",0.30,None),("S02",0.10,None),("S32",0.15,None)],
+    "S04": [("S05",0.60,None),("S03",0.15,None),("S32",0.22,None),("S33",0.03,None)],
+    "S05": [("S06",0.78,None),("S10",0.10,None),("S32",0.10,None),("S33",0.02,None)],
+    "S06": [("S07",0.70,None),("S33",0.08,None),("S32",0.22,None)],
+    "S07": [("S08",0.74,None),("S31",0.10,None),("S32",0.13,None),("S33",0.03,None)],
+    "S08": [("S09",0.86,None),("S31",0.05,None),("S32",0.07,None),("S33",0.02,None)],
+    "S09": [("S11",0.90,None),("S32",0.08,None),("S33",0.02,None)],
+    "S10": [("S11",0.82,None),("S31",0.10,None),("S32",0.06,None),("S33",0.02,None)],
+    "S11": [("S12",0.80,None),("S32",0.18,None),("S33",0.02,None)],
+    "S12": [("S13",0.74,None),("S32",0.22,None),("S33",0.04,None)],
+    "S13": [("S14",0.78,None),("S32",0.18,None),("S33",0.04,None)],
+    "S14": [("S15",0.86,None),("S32",0.12,None),("S33",0.02,None)],
+    "S15": [("S16",0.84,None),("S32",0.14,None),("S33",0.02,None)],
+    "S16": [("S17",0.75,None),("S32",0.22,None),("S33",0.03,None)],
+    # S17 = CRITICAL: abandono baja de 42% → 16% en escenario mejorado
+    "S17": [("S18",0.50,0.78),("S32",0.42,0.16),("S33",0.08,0.06)],
+    "S18": [("S19",0.78,None),("S32",0.18,None),("S33",0.04,None)],
+    "S19": [("S20",0.72,None),("S32",0.24,None),("S33",0.04,None)],
+    "S20": [("S21",0.70,None),("S32",0.26,None),("S33",0.04,None)],
+    "S21": [("S22",0.88,None),("S32",0.10,None),("S33",0.02,None)],
+    "S22": [("S23",0.92,None),("S32",0.06,None),("S33",0.02,None)],
+    "S23": [("S24",0.96,None),("S33",0.04,None)],
+    "S24": [("S25",0.94,None),("S32",0.04,None),("S33",0.02,None)],
+    "S25": [("S26",0.90,None),("S32",0.08,None),("S33",0.02,None)],
+    "S26": [("S27",0.98,None),("S33",0.02,None)],
+    "S27": [("S28",0.42,None),("S29",0.18,None),("S30",0.40,None)],
+    "S28": [("S28",1.0,None)],
+    "S29": [("S28",0.30,None),("S30",0.40,None),("S32",0.30,None)],
+    "S30": [("S30",1.0,None)],
+    "S31": [("S10",0.80,None),("S32",0.15,None),("S33",0.05,None)],
+    "S32": [("S32",1.0,None)],
+    "S33": [("S31",0.55,None),("S32",0.45,None)],
 }
 
-DESCRIPCIONES = {
-    "S0":"El usuario llega a la página principal de Colombia Comparte.",
-    "S1":"El usuario visita la sección informativa sobre la organización y su misión.",
-    "S2":"El usuario accede a la información del Programa EDIFICA de emprendimiento.",
-    "S3":"El usuario explora la sección de conferencias y Top Speakers.",
-    "S4":"El usuario lee las noticias y publicaciones del blog de la organización.",
-    "S5":"El usuario ingresa a Tu Aula, la plataforma de aprendizaje en línea.",
-    "S6":"El usuario visita la sección de contacto para comunicarse con la organización.",
-    "S7":"El usuario inicia el proceso de inscripción al Programa EDIFICA.",
-    "S8":"El usuario completa sus datos personales en el formulario.",
-    "S9":"El usuario describe su perfil como emprendedor en el formulario.",
-    "S10":"El usuario especifica sus expectativas y objetivos con el programa.",
-    "S11":"El usuario revisa el resumen de su inscripción antes de confirmar.",
-    "S12":"El formulario detecta campos incompletos o con errores de validación.",
-    "S13":"El usuario corrige los campos marcados con error en el formulario.",
-    "S14":"El usuario explora la página de donaciones y apoyo a la fundación.",
-    "S15":"El usuario lee o ve testimonios de emprendedores egresados del programa.",
-    "S16":"El usuario revisa la sección de misión y programas de la fundación.",
-    "S17":"El usuario consulta la historia y origen de Colombia Comparte.",
-    "S18":"El usuario explora la sección de mentores y voluntarios del programa.",
-    "S19":"El usuario navega por los módulos y contenidos del Programa EDIFICA.",
-    "S20":"El usuario descarga el brochure o material informativo del programa.",
-    "S21":"El usuario abandona el sitio para navegar por las redes sociales externas.",
-    "S22":"El usuario consulta la sección de preguntas frecuentes (FAQ).",
-    "S23":"El usuario inicia un chat de soporte o contacta por WhatsApp.",
-    "S24":"El usuario revisa la sección de organizaciones y empresas aliadas.",
-    "S25":"El usuario reproduce un video testimonial de la plataforma.",
-    "S26":"El usuario encuentra un error técnico o página no disponible.",
-    "S27":"La sesión del usuario queda inactiva por un periodo prolongado.",
-    "S28":"El usuario retoma la navegación después de un periodo de inactividad.",
-    "S29":"El usuario consulta los costos, modalidades y becas del programa.",
-    "S30":"El usuario completa exitosamente el formulario de inscripción al programa.",
-    "S31":"El usuario abandona voluntariamente el proceso antes de completarlo.",
-    "S32":"El usuario abandona el proceso debido a un error técnico irrecuperable.",
-}
-
-TIPOS = {"S0":"Inicial","S30":"Final exitoso","S31":"Final negativo","S32":"Error técnico"}
-for s in ESTADOS:
-    if s not in TIPOS:
-        TIPOS[s] = "Intermedio"
-
-RECORRIDOS = [
-    ["S0","S2","S19","S29","S7","S8","S9","S10","S11","S30"],
-    ["S0","S2","S7","S8","S9","S10","S11","S30"],
-    ["S0","S15","S2","S19","S7","S8","S9","S10","S11","S30"],
-    ["S0","S2","S15","S29","S7","S8","S9","S10","S11","S30"],
-    ["S0","S1","S2","S19","S29","S7","S8","S9","S10","S11","S30"],
-    ["S0","S2","S29","S7","S8","S12","S13","S9","S10","S11","S30"],
-    ["S0","S16","S2","S7","S8","S9","S10","S11","S30"],
-    ["S0","S2","S19","S7","S8","S9","S10","S12","S13","S11","S30"],
-    ["S0","S2","S29","S15","S7","S8","S9","S10","S11","S30"],
-    ["S0","S17","S2","S19","S7","S8","S9","S10","S11","S30"],
-    ["S0","S2","S22","S7","S8","S9","S10","S11","S30"],
-    ["S0","S2","S23","S7","S8","S9","S10","S11","S30"],
-    ["S0","S22","S2","S7","S8","S9","S10","S11","S30"],
-    ["S0","S2","S22","S29","S7","S8","S9","S10","S11","S30"],
-    ["S0","S2","S23","S29","S7","S8","S9","S10","S11","S30"],
-    ["S0","S1","S4","S31"],
-    ["S0","S4","S21","S31"],
-    ["S0","S3","S25","S21","S31"],
-    ["S0","S1","S17","S31"],
-    ["S0","S4","S31"],
-    ["S0","S3","S31"],
-    ["S0","S1","S16","S4","S31"],
-    ["S0","S14","S31"],
-    ["S0","S21","S31"],
-    ["S0","S5","S31"],
-    ["S0","S3","S25","S31"],
-    ["S0","S4","S3","S31"],
-    ["S0","S1","S18","S31"],
-    ["S0","S1","S4","S3","S31"],
-    ["S0","S16","S4","S31"],
-    ["S0","S2","S31"],
-    ["S0","S2","S15","S31"],
-    ["S0","S2","S19","S31"],
-    ["S0","S2","S29","S31"],
-    ["S0","S2","S19","S22","S31"],
-    ["S0","S2","S7","S31"],
-    ["S0","S2","S7","S8","S31"],
-    ["S0","S2","S7","S8","S9","S31"],
-    ["S0","S2","S7","S8","S9","S10","S31"],
-    ["S0","S2","S29","S7","S8","S31"],
-    ["S0","S26","S32"],
-    ["S0","S2","S7","S26","S32"],
-    ["S0","S2","S7","S8","S26","S32"],
-    ["S0","S5","S26","S32"],
-    ["S0","S2","S7","S8","S9","S26","S32"],
-    ["S0","S26","S28","S2","S7","S8","S9","S10","S11","S30"],
-    ["S0","S2","S7","S26","S28","S8","S9","S10","S11","S30"],
-    ["S0","S27","S28","S2","S7","S8","S31"],
-    ["S0","S27","S28","S2","S7","S8","S9","S10","S11","S30"],
-    ["S0","S2","S12","S13","S12","S32"],
-    ["S0","S1","S24","S18","S6","S30"],
-    ["S0","S24","S6","S30"],
-    ["S0","S1","S18","S6","S30"],
-    ["S0","S24","S18","S6","S31"],
-    ["S0","S6","S30"],
-    ["S0","S1","S24","S6","S31"],
-    ["S0","S24","S21","S31"],
-    ["S0","S18","S6","S30"],
-    ["S0","S2","S19","S4","S15","S2","S29","S7","S8","S9","S10","S11","S30"],
-    ["S0","S1","S17","S2","S19","S29","S7","S8","S12","S13","S9","S10","S11","S30"],
-    ["S0","S2","S19","S22","S2","S7","S8","S9","S10","S27","S28","S11","S30"],
-    ["S0","S4","S15","S2","S29","S7","S31"],
-    ["S0","S1","S2","S19","S4","S25","S2","S7","S8","S9","S10","S11","S31"],
-    ["S0","S15","S17","S2","S7","S8","S9","S10","S27","S28","S11","S30"],
-    ["S0","S22","S2","S29","S7","S8","S9","S10","S12","S13","S11","S30"],
-    ["S0","S2","S20","S7","S8","S9","S10","S11","S30"],
+PROFILES = [
+    ("P1","Explorador casual",    "S01", 0.35),
+    ("P2","Referido directo",     "S03", 0.22),
+    ("P3","Candidato motivado",   "S04", 0.20),
+    ("P4","Usuario recurrente",   "S10", 0.15),
+    ("P5","Reintento post-error", "S31", 0.08),
 ]
 
-PERFILES = {
-    tuple(r): (
-        "A – Emprendedor motivado"  if r[-1]=="S30" and "S21" not in r and len(r)>=8
-        else "D – Mentor / Aliado"  if "S24" in r or ("S6" in r and "S7" not in r)
-        else "C – Usuario con errores" if "S26" in r or "S27" in r or ("S12" in r and r[-1]!="S30")
-        else "E – Usuario indeciso"  if len(r)>=10
-        else "B – Visitante curioso"
-    )
-    for r in [tuple(x) for x in RECORRIDOS]
-}
+FUNNEL_PATH = ["S01","S05","S09","S11","S16","S17","S18","S21","S22","S23","S27","S28"]
 
 # ══════════════════════════════════════════════════════════════════════════════
-# FUNCIONES DEL MODELO
+#  SIMULATION ENGINE
 # ══════════════════════════════════════════════════════════════════════════════
 @st.cache_data
-def construir_matrices(recorridos, estados, estados_finales):
-    idx = {s: i for i, s in enumerate(estados)}
-    conteos = pd.DataFrame(0, index=estados, columns=estados)
-    for r in recorridos:
-        for i in range(len(r) - 1):
-            o, d = r[i], r[i+1]
-            if o not in estados_finales and o in idx and d in idx:
-                conteos.loc[o, d] += 1
-    probs = conteos.div(conteos.sum(axis=1).replace(0, np.nan), axis=0).fillna(0)
-    for ef in estados_finales:
-        if ef in probs.index:
-            probs.loc[ef] = 0.0
-            if ef in probs.columns:
-                probs.loc[ef, ef] = 1.0
-    return conteos, probs
+def build_matrix(scenario: str) -> np.ndarray:
+    M = np.zeros((N_STATES, N_STATES))
+    for from_id, edges in T_RAW.items():
+        i = STATE_IDX[from_id]
+        for (to_id, p1, p2) in edges:
+            p = p2 if (scenario == "improved" and p2 is not None) else p1
+            M[i, STATE_IDX[to_id]] = p
+        row_sum = M[i].sum()
+        if row_sum > 0:
+            M[i] /= row_sum
+    return M
 
-def simular_usuario(matriz_prob, estado_inicial, estados_finales, max_pasos):
-    estado = estado_inicial
-    historial = [estado]
-    for _ in range(max_pasos):
-        if estado in estados_finales:
-            break
-        if estado not in matriz_prob.index:
-            break
-        probs = matriz_prob.loc[estado]
-        if probs.sum() == 0:
-            break
-        estado = np.random.choice(matriz_prob.columns.tolist(), p=probs.values)
-        historial.append(estado)
-    return historial
 
-def simular_n(n, matriz_prob, estado_inicial, estados_finales, max_pasos):
-    rows = []
-    for i in range(n):
-        h = simular_usuario(matriz_prob, estado_inicial, estados_finales, max_pasos)
-        ef = h[-1]
-        resultado = (
-            "Éxito ✅"   if ef == ESTADO_EXITO   else
-            "Error ⚠️"   if ef == ESTADO_ERROR   else
-            "Abandono ❌"
-        )
-        rows.append({
-            "Usuario":             f"Usuario {i+1:04d}",
-            "Recorrido":           " → ".join(h),
-            "Recorrido (nombres)": " → ".join(NOMBRES.get(e, e) for e in h),
-            "Estado final":        ef,
-            "Resultado":           resultado,
-            "Pasos":               len(h) - 1,
-        })
-    return pd.DataFrame(rows)
+@st.cache_data
+def simulate(n: int, max_steps: int, scenario: str, seed: int) -> dict:
+    M = build_matrix(scenario)
+    rng = np.random.default_rng(seed)
 
-def estado_critico(df_sim):
-    abnd = df_sim[df_sim["Estado final"] == ESTADO_ABANDONO]["Recorrido"]
-    previos = []
-    for r in abnd:
-        pasos = [p.strip() for p in r.split("→")]
-        if len(pasos) >= 2:
-            previos.append(pasos[-2])
-    if not previos:
-        return None, 0
-    c = Counter(previos)
-    ec, n = c.most_common(1)[0]
-    return ec, n
+    weights = np.array([p[3] for p in PROFILES], dtype=float)
+    weights /= weights.sum()
+    cum_w = np.cumsum(weights)
 
-def matriz_mejorada_fn(matriz_prob, ec, reduccion=0.20):
-    m = matriz_prob.copy()
-    if ec not in m.index or ESTADO_ABANDONO not in m.columns:
-        return m
-    prob_actual = m.loc[ec, ESTADO_ABANDONO]
-    red_real = min(reduccion, prob_actual)
-    if red_real <= 0:
-        return m
-    m.loc[ec, ESTADO_ABANDONO] -= red_real
-    otros  = m.loc[ec].drop(ESTADO_ABANDONO)
-    validos = otros[otros > 0].index.tolist()
-    if not validos:
-        if ESTADO_EXITO in m.columns:
-            m.loc[ec, ESTADO_EXITO] += red_real
-    else:
-        suma = m.loc[ec, validos].sum()
-        for d in validos:
-            m.loc[ec, d] += red_real * (m.loc[ec, d] / suma)
-    s = m.loc[ec].sum()
-    if s > 0:
-        m.loc[ec] /= s
-    return m
+    finals    = np.zeros(N_STATES, dtype=int)
+    visits    = np.zeros(N_STATES, dtype=int)
+    step_dist = np.zeros((max_steps + 1, N_STATES), dtype=int)
+    counts    = np.zeros((N_STATES, N_STATES), dtype=int)
+    steps_to_outcome = {"success": [], "abandon": [], "reject": [], "error": []}
+    profile_outcomes = [
+        {"success": 0, "abandon": 0, "reject": 0, "error": 0, "inprocess": 0}
+        for _ in PROFILES
+    ]
 
-def recomendacion_edifica(ec, matriz_prob):
-    nombre  = NOMBRES.get(ec, ec)
-    desc    = DESCRIPCIONES.get(ec, "")
-    prob_ab = matriz_prob.loc[ec, ESTADO_ABANDONO] if ec in matriz_prob.index else 0
-    texto   = f"{nombre} {desc}".lower()
-    if "red" in texto or "social" in texto:
-        causa  = "Los enlaces a redes sociales redirigen al usuario fuera del sitio sin posibilidad de retorno."
-        mejora = "Modificar los enlaces para que abran en nueva pestaña, manteniendo al usuario dentro del flujo."
-        accion = "Reducir P(S21→S31) de 1.0 a ~0.3 e introducir transiciones de retorno hacia S0 y S2."
-        kpi    = "Tasa de retorno desde redes sociales al flujo principal."
-    elif "formulario" in texto or "datos" in texto or "campo" in texto:
-        causa  = "Los formularios largos o poco claros generan fricción y aumentan la probabilidad de abandono."
-        mejora = "Simplificar el formulario reduciendo campos obligatorios y añadir guardado automático."
-        accion = "Reducir P(S8→S31) aumentando P(S8→S9) en la matriz de transición."
-        kpi    = "Tasa de completitud del formulario de inscripción."
-    elif "noticia" in texto or "actualidad" in texto:
-        causa  = "Los usuarios que consumen contenido editorial no encuentran un camino claro hacia la inscripción."
-        mejora = "Agregar llamadas a la acción visibles ('Inscríbete a EDIFICA') en las páginas de noticias."
-        accion = "Reducir P(S4→S31) e incrementar P(S4→S2) y P(S4→S7)."
-        kpi    = "Tasa de navegación de Noticias hacia el Programa EDIFICA."
-    elif "speaker" in texto or "confer" in texto or "video" in texto:
-        causa  = "El contenido de conferencias no conecta directamente con el proceso de inscripción."
-        mejora = "Incluir un botón de inscripción prominente debajo de cada video o sección de speakers."
-        accion = "Reducir P(S3→S31) e incrementar P(S3→S2)."
-        kpi    = "Conversión desde sección de conferencias hacia inscripción."
-    else:
-        causa  = "El usuario encuentra fricción o falta de claridad en este punto del recorrido."
-        mejora = "Revisar el contenido del estado, mejorar la jerarquía visual y agregar una llamada a la acción clara."
-        accion = f"Reducir la probabilidad de abandono desde {ec} y redistribuirla hacia estados del flujo."
-        kpi    = f"Tasa de avance desde {ec} hacia estados del formulario."
-    return {"estado": ec, "nombre": nombre, "descripcion": desc,
-            "prob_abandono": prob_ab,
-            "causa": causa, "mejora": mejora, "accion": accion, "kpi": kpi}
+    M_cs = np.cumsum(M, axis=1)   # precomputed cumsum rows
+
+    for _ in range(n):
+        r0    = rng.random()
+        p_idx = int(np.searchsorted(cum_w, r0))
+        p_idx = min(p_idx, len(PROFILES) - 1)
+        s     = STATE_IDX[PROFILES[p_idx][2]]
+
+        visits[s]       += 1
+        step_dist[0][s] += 1
+        terminal = terminal_of(s)
+        step = 0
+
+        while terminal is None and step < max_steps:
+            nxt = int(np.searchsorted(M_cs[s], rng.random()))
+            nxt = min(nxt, N_STATES - 1)
+            counts[s, nxt] += 1
+            s = nxt
+            step += 1
+            visits[s] += 1
+            if step <= max_steps:
+                step_dist[step][s] += 1
+            terminal = terminal_of(s)
+
+        finals[s] += 1
+        if terminal:
+            steps_to_outcome[terminal].append(step)
+            profile_outcomes[p_idx][terminal] += 1
+        else:
+            profile_outcomes[p_idx]["inprocess"] += 1
+
+    outcome = {"success": 0, "abandon": 0, "reject": 0, "error": 0, "inprocess": 0}
+    for i in range(N_STATES):
+        t = terminal_of(i)
+        outcome[t if t else "inprocess"] += finals[i]
+
+    abandon_idx = STATE_IDX["S32"]
+    critical = {"idx": -1, "score": 0, "abandon_flow": 0, "abandon_rate": 0.0, "outflow": 0}
+    for i in range(N_STATES):
+        if terminal_of(i) is not None:
+            continue
+        outflow = int(counts[i].sum())
+        if outflow < 5:
+            continue
+        ab_flow = int(counts[i, abandon_idx])
+        if ab_flow > critical["score"]:
+            critical = {
+                "idx": i, "score": ab_flow, "abandon_flow": ab_flow,
+                "abandon_rate": ab_flow / outflow, "outflow": outflow,
+            }
+
+    avg_steps = {
+        k: float(np.mean(v)) if v else 0.0
+        for k, v in steps_to_outcome.items()
+    }
+
+    return {
+        "n": n, "max_steps": max_steps, "scenario": scenario, "seed": seed,
+        "finals": finals, "visits": visits, "step_dist": step_dist, "counts": counts,
+        "outcome": outcome, "steps_to_outcome": steps_to_outcome,
+        "avg_steps": avg_steps, "profile_outcomes": profile_outcomes,
+        "critical": critical, "M": M,
+    }
 
 # ══════════════════════════════════════════════════════════════════════════════
-# DATAFRAMES BASE
+#  CHART HELPERS
 # ══════════════════════════════════════════════════════════════════════════════
-matriz_conteos, matriz_prob = construir_matrices(RECORRIDOS, ESTADOS, ESTADOS_FINALES)
+def fig_to_b64(fig) -> str:
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", dpi=130, bbox_inches="tight",
+                facecolor=SURF, transparent=False)
+    plt.close(fig)
+    buf.seek(0)
+    return base64.b64encode(buf.read()).decode()
 
-df_estados = pd.DataFrame({
-    "Código":      ESTADOS,
-    "Nombre":      [NOMBRES[e] for e in ESTADOS],
-    "Descripción": [DESCRIPCIONES[e] for e in ESTADOS],
-    "Tipo":        [TIPOS[e] for e in ESTADOS],
-})
+def render_img(fig, caption=""):
+    b64 = fig_to_b64(fig)
+    html = f'<img src="data:image/png;base64,{b64}" style="width:100%;border-radius:6px;"/>'
+    if caption:
+        html += f'<p style="font-size:.67rem;color:{FG_D};margin-top:3px;">{caption}</p>'
+    st.markdown(html, unsafe_allow_html=True)
 
-df_recorridos_base = pd.DataFrame({
-    "ID":                  [f"R{i+1:02d}" for i in range(len(RECORRIDOS))],
-    "Perfil":              [PERFILES.get(tuple(r), "—") for r in RECORRIDOS],
-    "Recorrido":           [" → ".join(r) for r in RECORRIDOS],
-    "Recorrido (nombres)": [" → ".join(NOMBRES.get(e, e) for e in r) for r in RECORRIDOS],
-    "Estado final":        [r[-1] for r in RECORRIDOS],
-    "Resultado":           [
-        "Éxito ✅" if r[-1]==ESTADO_EXITO else
-        "Error ⚠️" if r[-1]==ESTADO_ERROR else "Abandono ❌"
-        for r in RECORRIDOS
-    ],
-    "Pasos": [len(r)-1 for r in RECORRIDOS],
-})
+def chart_funnel(res_b, res_i=None):
+    labels = [STATE_NAMES[STATE_IDX[s]] for s in FUNNEL_PATH]
+    bvis   = [res_b["visits"][STATE_IDX[s]] for s in FUNNEL_PATH]
+    x      = np.arange(len(FUNNEL_PATH))
+
+    fig, ax = plt.subplots(figsize=(7, 3.9))
+    fig.patch.set_facecolor(SURF); ax.set_facecolor(SURF)
+
+    bw = 0.37 if res_i else 0.6
+    ax.bar(x - (bw/2 if res_i else 0), bvis, width=bw,
+           color=ACC, alpha=0.85, zorder=3, label="Base")
+    if res_i:
+        ivis = [res_i["visits"][STATE_IDX[s]] for s in FUNNEL_PATH]
+        ax.bar(x + bw/2, ivis, width=bw,
+               color=GOOD, alpha=0.85, zorder=3, label="Mejorado")
+        ax.legend(fontsize=7, frameon=False, loc="upper right")
+
+    ax.set_xticks(x)
+    ax.set_xticklabels(labels, rotation=38, ha="right", fontsize=6.3, color=FG_M)
+    ax.set_ylabel("Visitas", fontsize=7.5, color=FG_D)
+    ax.tick_params(axis="y", labelsize=7, colors=FG_D)
+    ax.tick_params(axis="x", colors=FG_M)
+    ax.spines[["top","right","left"]].set_visible(False)
+    ax.spines["bottom"].set_color(BORD)
+    ax.grid(axis="y", color=BORD, linewidth=0.5, zorder=0)
+    ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda v,_: f"{int(v):,}"))
+    fig.tight_layout(pad=0.6)
+    return fig
+
+def chart_heatmap(res):
+    M = res["M"]
+    fig, ax = plt.subplots(figsize=(8, 7.5))
+    fig.patch.set_facecolor(SURF); ax.set_facecolor(SURF)
+
+    cmap = LinearSegmentedColormap.from_list("edifica",
+        [SURF, "#C7CBF7", ACC], N=256)
+    im = ax.imshow(M, cmap=cmap, vmin=0, vmax=1, aspect="auto")
+
+    short = [f"S{i+1:02d}" for i in range(N_STATES)]
+    ax.set_xticks(range(N_STATES))
+    ax.set_xticklabels(short, fontsize=5, rotation=90, color=FG_M)
+    ax.set_yticks(range(N_STATES))
+    ax.set_yticklabels(short, fontsize=5, color=FG_M)
+    ax.set_xlabel("Estado destino", fontsize=7, color=FG_D)
+    ax.set_ylabel("Estado origen",  fontsize=7, color=FG_D)
+    cb = plt.colorbar(im, ax=ax, fraction=0.025, pad=0.02)
+    cb.ax.tick_params(labelsize=7)
+    fig.tight_layout(pad=0.5)
+    return fig
+
+def chart_stepchart(res_b, res_i=None):
+    sd_b   = res_b["step_dist"]
+    t_mask = np.array([terminal_of(i) is not None for i in range(N_STATES)])
+    steps  = range(sd_b.shape[0])
+    act_b  = np.array([sd_b[t, ~t_mask].sum() for t in steps])
+
+    fig, ax = plt.subplots(figsize=(7, 3.2))
+    fig.patch.set_facecolor(SURF); ax.set_facecolor(SURF)
+
+    ax.plot(steps, act_b, color=ACC, linewidth=2, label="Base", zorder=3)
+    ax.fill_between(steps, act_b, alpha=0.07, color=ACC)
+    if res_i:
+        sd_i  = res_i["step_dist"]
+        act_i = np.array([sd_i[t, ~t_mask].sum() for t in steps])
+        ax.plot(steps, act_i, color=GOOD, linewidth=2, label="Mejorado", zorder=3)
+        ax.fill_between(steps, act_i, alpha=0.07, color=GOOD)
+        ax.legend(fontsize=7, frameon=False)
+
+    ax.set_xlabel("Paso", fontsize=7.5, color=FG_D)
+    ax.set_ylabel("Usuarios activos", fontsize=7.5, color=FG_D)
+    ax.tick_params(labelsize=7, colors=FG_D)
+    ax.spines[["top","right"]].set_visible(False)
+    ax.spines[["bottom","left"]].set_color(BORD)
+    ax.grid(color=BORD, linewidth=0.5, zorder=0)
+    ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda v,_: f"{int(v):,}"))
+    fig.tight_layout(pad=0.6)
+    return fig
+
+def chart_profiles(res_b):
+    cats   = ["success","abandon","reject","error"]
+    colors = [GOOD, BAD, WARN, FG_D]
+    labels_cat = ["Aceptado","Abandono","Rechazado","Error"]
+    x = np.arange(len(PROFILES))
+
+    fig, ax = plt.subplots(figsize=(6, 3.5))
+    fig.patch.set_facecolor(SURF); ax.set_facecolor(SURF)
+
+    bottom = np.zeros(len(PROFILES))
+    for cat, col, lbl in zip(cats, colors, labels_cat):
+        vals = np.array([res_b["profile_outcomes"][i][cat] for i in range(len(PROFILES))], float)
+        ax.bar(x, vals, bottom=bottom, color=col, alpha=0.85, label=lbl, zorder=3)
+        bottom += vals
+
+    ax.set_xticks(x)
+    ax.set_xticklabels([p[1] for p in PROFILES], rotation=20, ha="right",
+                       fontsize=7, color=FG_M)
+    ax.set_ylabel("Usuarios", fontsize=7.5, color=FG_D)
+    ax.legend(fontsize=6.5, frameon=False, loc="upper right")
+    ax.spines[["top","right"]].set_visible(False)
+    ax.spines[["bottom","left"]].set_color(BORD)
+    ax.grid(axis="y", color=BORD, linewidth=0.5, zorder=0)
+    ax.tick_params(labelsize=7, colors=FG_D)
+    ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda v,_: f"{int(v):,}"))
+    fig.tight_layout(pad=0.6)
+    return fig
+
+# ── KPI card HTML ──────────────────────────────────────────────────────────────
+def kpi(label, value, delta=None, pos=True):
+    d = ""
+    if delta is not None:
+        cls   = "pos" if pos else "neg"
+        arrow = "▲" if pos else "▼"
+        d = f'<div class="kpi-delta {cls}">{arrow} {delta}</div>'
+    return (f'<div class="kpi">'
+            f'<div class="kpi-label">{label}</div>'
+            f'<div class="kpi-value">{value}</div>{d}</div>')
 
 # ══════════════════════════════════════════════════════════════════════════════
-# SIDEBAR
+#  MAIN APP
 # ══════════════════════════════════════════════════════════════════════════════
-with st.sidebar:
-    st.markdown("<h2 style='text-align:center;color:white;'>🤝 COLOMBIA COMPARTE</h2>",
-                unsafe_allow_html=True)
-    st.markdown("<p style='text-align:center;color:#A0C4FF;'>Programa EDIFICA</p>",
-                unsafe_allow_html=True)
-    st.markdown("### ⚙️ Parámetros de Simulación")
 
-    n_usuarios = st.slider("Número de usuarios", 100, 5000, 1000, 100,
-                           help="Usuarios que la cadena de Márkov simulará.")
-    max_pasos  = st.slider("Máximo de pasos",    5,   60,   25,  5,
-                           help="Límite de transiciones por recorrido.")
-    estado_inicial_sel = st.selectbox(
-        "Estado inicial", options=ESTADOS, index=0,
-        format_func=lambda x: f"{x} – {NOMBRES.get(x, x)}"
-    )
-    st.markdown("---")
-    st.success(f"✅ {ESTADO_EXITO} – {NOMBRES[ESTADO_EXITO]}")
-    st.error(f"❌ {ESTADO_ABANDONO} – {NOMBRES[ESTADO_ABANDONO]}")
-    st.warning(f"⚠️ {ESTADO_ERROR} – {NOMBRES[ESTADO_ERROR]}")
-    st.markdown("---")
-
-    if st.button("🔄 Reiniciar Simulación", use_container_width=True):
-        st.session_state.clear()
-        st.rerun()
-
-    st.markdown(
-        "<div style='font-size:0.74rem;color:#7bb8d8;line-height:1.6;'>"
-        "📚 <b>Universidad Santo Tomás</b><br>Seccional Tunja · 2026</div>",
-        unsafe_allow_html=True
-    )
-
-# ══════════════════════════════════════════════════════════════════════════════
-# HERO BANNER
-# ══════════════════════════════════════════════════════════════════════════════
+# ── Header ─────────────────────────────────────────────────────────────────────
 st.markdown("""
-<div class="hero">
-  <h1>Simulación Markov — EDIFICA</h1>
-  <p>Análisis del flujo de inscripción al Programa EDIFICA · 33 estados · 66 recorridos base · Cadenas de Márkov</p>
+<div class="edifica-header">
+  <h1>EDIFICA · Simulación Markov <span>Programa Colombia Comparte</span></h1>
+  <div style="font-size:.72rem;color:#9A968B;">
+    Universidad Santo Tomás · Seccional Tunja · 2026
+  </div>
 </div>
 """, unsafe_allow_html=True)
 
-# ══════════════════════════════════════════════════════════════════════════════
-# SIMULACIÓN INICIAL (session state)
-# ══════════════════════════════════════════════════════════════════════════════
-if "df_sim" not in st.session_state:
-    st.session_state["df_sim"] = simular_n(
-        n_usuarios, matriz_prob, estado_inicial_sel, ESTADOS_FINALES, max_pasos
-    )
+# ── Controls ───────────────────────────────────────────────────────────────────
+cc = st.columns([1.6, 1.6, 1, 1.8, 1], gap="small")
+with cc[0]: n_usuarios = st.slider("Usuarios", 200, 5000, 1500, 100)
+with cc[1]: max_pasos  = st.slider("Pasos máximos", 5, 50, 25)
+with cc[2]: seed_val   = st.number_input("Semilla", value=42, min_value=0,
+                                          max_value=9999, step=1)
+with cc[3]: scenario   = st.selectbox(
+    "Escenario", ["base","improved"],
+    format_func=lambda x: "📊 Base (sin mejoras)" if x=="base"
+                          else "✅ Mejorado (S17 optimizado)"
+)
+with cc[4]: run_btn = st.button("▶ Ejecutar", type="primary", use_container_width=True)
 
-df_sim      = st.session_state["df_sim"]
-ec_actual, ec_n = estado_critico(df_sim)
-pct_exito   = (df_sim["Estado final"] == ESTADO_EXITO).mean()   * 100
-pct_abnd    = (df_sim["Estado final"] == ESTADO_ABANDONO).mean()* 100
-pct_err     = (df_sim["Estado final"] == ESTADO_ERROR).mean()   * 100
-prom_pasos  = df_sim["Pasos"].mean()
+st.markdown('<hr class="edifica"/>', unsafe_allow_html=True)
+
+# ── Run simulation ─────────────────────────────────────────────────────────────
+if "res_base" not in st.session_state:
+    st.session_state.res_base = None
+    st.session_state.res_imp  = None
+
+if run_btn or st.session_state.res_base is None:
+    with st.spinner("Ejecutando simulación Markov…"):
+        st.session_state.res_base = simulate(n_usuarios, max_pasos, "base",     int(seed_val))
+        st.session_state.res_imp  = simulate(n_usuarios, max_pasos, "improved", int(seed_val))
+    st.balloons()
+
+res_b = st.session_state.res_base
+res_i = st.session_state.res_imp
+
+if res_b is None:
+    st.info("Presiona **▶ Ejecutar** para iniciar la simulación.")
+    st.stop()
+
+# ── Derived metrics ────────────────────────────────────────────────────────────
+n      = res_b["n"]
+oc_b   = res_b["outcome"]
+oc_i   = res_i["outcome"]
+conv_b = oc_b["success"] / n * 100
+conv_i = oc_i["success"] / n * 100
+Δconv  = conv_i - conv_b
+abd_b  = oc_b["abandon"] / n * 100
+abd_i  = oc_i["abandon"] / n * 100
+Δabd   = abd_b - abd_i
+avg_s_b = res_b["avg_steps"].get("success", 0)
+crit    = res_b["critical"]
+crit_name = STATE_NAMES[crit["idx"]] if crit["idx"] >= 0 else "—"
+crit_id   = STATE_IDS[crit["idx"]]   if crit["idx"] >= 0 else "—"
+crit_rate = crit["abandon_rate"] * 100
+
+# ── KPI Row ────────────────────────────────────────────────────────────────────
+st.markdown(
+    '<div class="kpi-row">'
+    + kpi("Tasa de éxito (base)",     f"{conv_b:.1f}%")
+    + kpi("Tasa de éxito (mejor.)",   f"{conv_i:.1f}%",   f"+{Δconv:.1f}pp",   True)
+    + kpi("Abandono (base)",          f"{abd_b:.1f}%")
+    + kpi("Reducción abandono",       f"{Δabd:.1f}pp",    f"−{Δabd:.1f}pp",    True)
+    + kpi("Pasos prom. éxito",        f"{avg_s_b:.1f}")
+    + kpi("Estado crítico",
+          (crit_name[:14]+"…" if len(crit_name) > 14 else crit_name),
+          f"{crit_rate:.0f}% ab.", False)
+    + '</div>',
+    unsafe_allow_html=True,
+)
+
+# ── Tabs ───────────────────────────────────────────────────────────────────────
+tab1, tab2, tab3 = st.tabs([
+    "📈 Simulación",
+    "🔥 Matriz de transición",
+    "📊 Análisis detallado",
+])
 
 # ══════════════════════════════════════════════════════════════════════════════
-# PESTAÑAS  (estructura Simulacion Desing)
+#  TAB 1 — SIMULACIÓN
 # ══════════════════════════════════════════════════════════════════════════════
-tab1, tab2, tab3 = st.tabs(["▶️ Simulación", "🗂️ Estados y Transiciones", "📊 Análisis"])
-
-# ─────────────────────────────────────────────────────────────────────────────
-# TAB 1 · SIMULACIÓN
-# ─────────────────────────────────────────────────────────────────────────────
 with tab1:
-    col1, col2 = st.columns([1, 2])
+    left, right = st.columns([1.1, 1.4], gap="medium")
 
-    with col1:
-        if st.button("▶️ Ejecutar Simulación", type="primary", use_container_width=True):
-            with st.spinner("Ejecutando simulación con cadenas de Márkov..."):
-                st.session_state["df_sim"] = simular_n(
-                    n_usuarios, matriz_prob, estado_inicial_sel, ESTADOS_FINALES, max_pasos
-                )
-                for k in ["df_sim_mejor", "rec_obj", "matriz_mejor"]:
-                    st.session_state.pop(k, None)
-            st.success(f"✅ Simulación completada: {n_usuarios:,} usuarios generados.")
-            st.balloons()
-            df_sim     = st.session_state["df_sim"]
-            ec_actual, ec_n = estado_critico(df_sim)
-            pct_exito  = (df_sim["Estado final"]==ESTADO_EXITO).mean()*100
-            pct_abnd   = (df_sim["Estado final"]==ESTADO_ABANDONO).mean()*100
-            pct_err    = (df_sim["Estado final"]==ESTADO_ERROR).mean()*100
-            prom_pasos = df_sim["Pasos"].mean()
+    # ── Left column ────────────────────────────────────────────────────────────
+    with left:
+        # Funnel
+        st.markdown('<div class="card"><h3>Embudo de conversión</h3>',
+                    unsafe_allow_html=True)
+        render_img(chart_funnel(res_b, res_i))
+        st.markdown("</div>", unsafe_allow_html=True)
 
-        st.markdown("<br>", unsafe_allow_html=True)
+        # Step chart
+        st.markdown('<div class="card"><h3>Usuarios activos por paso</h3>',
+                    unsafe_allow_html=True)
+        render_img(chart_stepchart(res_b, res_i))
+        st.markdown("</div>", unsafe_allow_html=True)
 
-        # KPIs
-        for icon, label, val, detail in [
-            ("✅","Tasa de éxito",    f"{pct_exito:.1f}%",  f"{int(pct_exito*len(df_sim)/100)} usuarios"),
-            ("❌","Tasa de abandono", f"{pct_abnd:.1f}%",   f"{int(pct_abnd*len(df_sim)/100)} usuarios"),
-            ("⚠️","Error técnico",   f"{pct_err:.1f}%",    f"{int(pct_err*len(df_sim)/100)} usuarios"),
-            ("📏","Promedio pasos",  f"{prom_pasos:.1f}",  "por usuario simulado"),
-            ("🚨","Estado crítico",  ec_actual or "—",
-             NOMBRES.get(ec_actual,"Sin datos")[:30] if ec_actual else "Sin datos"),
-        ]:
-            st.markdown(f"""
-            <div class="kpi-box">
-              <div class="kpi-label">{icon} {label}</div>
-              <div class="kpi-value">{val}</div>
-              <div class="kpi-detail">{detail}</div>
-            </div><br>
-            """, unsafe_allow_html=True)
-
-    with col2:
-        st.markdown("#### 👁️ Vista previa — primeros 20 usuarios simulados")
-        df_prev = st.session_state["df_sim"].head(20)[["Usuario","Resultado","Pasos","Recorrido"]]
-        st.dataframe(df_prev, use_container_width=True, hide_index=True,
-                     column_config={"Recorrido": st.column_config.TextColumn("Recorrido", width=380)})
-
-# ─────────────────────────────────────────────────────────────────────────────
-# TAB 2 · ESTADOS Y TRANSICIONES
-# ─────────────────────────────────────────────────────────────────────────────
-with tab2:
-    st.markdown("### 🗂️ Estados del modelo")
-    st.caption("33 pantallas y acciones posibles dentro de la plataforma Colombia Comparte.")
-
-    col_f1, col_f2 = st.columns([2, 1])
-    with col_f1:
-        busqueda = st.text_input("🔍 Buscar estado", placeholder="Ej: S7 o formulario")
-    with col_f2:
-        filtro_tipo = st.multiselect("Tipo", options=df_estados["Tipo"].unique().tolist(),
-                                     default=df_estados["Tipo"].unique().tolist())
-
-    df_ef = df_estados[df_estados["Tipo"].isin(filtro_tipo)]
-    if busqueda:
-        mask = (df_ef["Código"].str.contains(busqueda, case=False) |
-                df_ef["Nombre"].str.contains(busqueda, case=False) |
-                df_ef["Descripción"].str.contains(busqueda, case=False))
-        df_ef = df_ef[mask]
-
-    st.dataframe(df_ef, use_container_width=True, hide_index=True,
-                 column_config={
-                     "Código":      st.column_config.TextColumn("Código",  width=80),
-                     "Nombre":      st.column_config.TextColumn("Nombre",  width=220),
-                     "Descripción": st.column_config.TextColumn("Descripción", width=400),
-                     "Tipo":        st.column_config.TextColumn("Tipo",    width=130),
-                 })
-    st.caption(f"Mostrando {len(df_ef)} de {len(df_estados)} estados.")
-
-    st.markdown("---")
-    st.markdown("### 🔀 Recorridos base")
-    st.caption("66 caminos realistas construidos a partir de 5 perfiles de usuario.")
-
-    fc1, fc2 = st.columns(2)
-    with fc1:
-        f_res = st.multiselect("Resultado", options=df_recorridos_base["Resultado"].unique().tolist(),
-                               default=df_recorridos_base["Resultado"].unique().tolist())
-    with fc2:
-        f_prf = st.multiselect("Perfil",    options=df_recorridos_base["Perfil"].unique().tolist(),
-                               default=df_recorridos_base["Perfil"].unique().tolist())
-
-    df_rf = df_recorridos_base[
-        df_recorridos_base["Resultado"].isin(f_res) &
-        df_recorridos_base["Perfil"].isin(f_prf)
-    ]
-    st.dataframe(df_rf[["ID","Perfil","Recorrido","Resultado","Pasos"]],
-                 use_container_width=True, hide_index=True)
-    st.caption(f"Mostrando {len(df_rf)} de {len(RECORRIDOS)} recorridos.")
-
-    st.markdown("---")
-    st.markdown("### 📐 Matrices de transición")
-    tipo_mat = st.radio("Ver", ["📊 Conteos", "🎯 Probabilidades"], horizontal=True)
-    activos  = [s for s in ESTADOS if matriz_conteos.loc[s].sum()>0 or matriz_conteos[s].sum()>0]
-
-    if tipo_mat == "📊 Conteos":
-        st.dataframe(matriz_conteos.loc[activos, activos], use_container_width=True)
-    else:
-        st.dataframe(matriz_prob.loc[activos, activos].round(4), use_container_width=True)
-
-    st.markdown("#### 🌡️ Mapa de calor (estados principales)")
-    core = ["S0","S2","S7","S8","S9","S10","S11","S15","S19","S21","S22","S29","S30","S31","S32"]
-    sub  = matriz_prob.loc[core, core]
-    fig_hm, ax_hm = plt.subplots(figsize=(10, 5))
-    fig_hm.patch.set_facecolor('#01182E'); ax_hm.set_facecolor('#01182E')
-    im = ax_hm.imshow(sub.values, cmap='Blues', aspect='auto', vmin=0, vmax=1)
-    ax_hm.set_xticks(range(len(core))); ax_hm.set_yticks(range(len(core)))
-    ax_hm.set_xticklabels(core, rotation=45, ha='right', color='white', fontsize=8)
-    ax_hm.set_yticklabels(core, color='white', fontsize=8)
-    for i in range(len(core)):
-        for j in range(len(core)):
-            v = sub.values[i, j]
-            if v > 0.05:
-                ax_hm.text(j, i, f"{v:.2f}", ha='center', va='center',
-                           fontsize=7, color='white' if v > 0.5 else '#001A3A', fontweight='bold')
-    cbar = fig_hm.colorbar(im, ax=ax_hm)
-    plt.setp(cbar.ax.yaxis.get_ticklabels(), color='white', fontsize=8)
-    ax_hm.set_title("Matriz de probabilidades", color='white', fontsize=10, pad=8)
-    plt.tight_layout()
-    st.pyplot(fig_hm)
-    plt.close()
-
-# ─────────────────────────────────────────────────────────────────────────────
-# TAB 3 · ANÁLISIS
-# ─────────────────────────────────────────────────────────────────────────────
-with tab3:
-    df_sim = st.session_state["df_sim"]
-    pct_e  = (df_sim["Estado final"]==ESTADO_EXITO).mean()*100
-    pct_a  = (df_sim["Estado final"]==ESTADO_ABANDONO).mean()*100
-    pct_er = (df_sim["Estado final"]==ESTADO_ERROR).mean()*100
-    prom   = df_sim["Pasos"].mean()
-    prom_e = df_sim[df_sim["Estado final"]==ESTADO_EXITO]["Pasos"].mean()
-    prom_a = df_sim[df_sim["Estado final"]==ESTADO_ABANDONO]["Pasos"].mean()
-
-    m1, m2, m3, m4 = st.columns(4)
-    m1.metric("✅ Éxito",          f"{pct_e:.1f}%",  f"{int(pct_e*len(df_sim)/100)} usuarios")
-    m2.metric("❌ Abandono",       f"{pct_a:.1f}%",  f"{int(pct_a*len(df_sim)/100)} usuarios")
-    m3.metric("⚠️ Error técnico",  f"{pct_er:.1f}%", f"{int(pct_er*len(df_sim)/100)} usuarios")
-    m4.metric("📏 Promedio pasos", f"{prom:.2f}",    f"Éxito:{prom_e:.1f} | Abandono:{prom_a:.1f}")
-
-    st.markdown("<br>", unsafe_allow_html=True)
-    gr1, gr2 = st.columns(2)
-
-    with gr1:
-        st.markdown("#### 📊 Distribución de resultados")
-        fig1, ax1 = plt.subplots(figsize=(5, 4))
-        fig1.patch.set_facecolor('#01182E'); ax1.set_facecolor('#01182E')
-        vals = [int(pct_e*len(df_sim)/100), int(pct_a*len(df_sim)/100), int(pct_er*len(df_sim)/100)]
-        etiq = [f"Éxito\n{pct_e:.1f}%", f"Abandono\n{pct_a:.1f}%", f"Error\n{pct_er:.1f}%"]
-        ax1.pie(vals, labels=etiq, colors=["#1E7E34","#C0392B","#D4780A"],
-                startangle=140,
-                wedgeprops=dict(edgecolor='#01182E', linewidth=2),
-                textprops=dict(color='white', fontsize=10, fontweight='bold'))
-        ax1.set_title(f"{len(df_sim):,} usuarios simulados", color='white', fontsize=10)
-        plt.tight_layout(); st.pyplot(fig1); plt.close()
-
-    with gr2:
-        st.markdown("#### 📏 Pasos promedio por resultado")
-        fig2, ax2 = plt.subplots(figsize=(5, 4))
-        fig2.patch.set_facecolor('#01182E'); ax2.set_facecolor('#01182E')
-        grupos = df_sim.groupby("Estado final")["Pasos"].mean()
-        etiq2, vals2, cols2 = [], [], []
-        for ef, col, lab in [(ESTADO_EXITO,"#1E7E34","Éxito"),
-                             (ESTADO_ABANDONO,"#C0392B","Abandono"),
-                             (ESTADO_ERROR,"#D4780A","Error")]:
-            if ef in grupos:
-                etiq2.append(lab); vals2.append(grupos[ef]); cols2.append(col)
-        bars2 = ax2.bar(etiq2, vals2, color=cols2, edgecolor='#01182E', width=0.5)
-        for b, v in zip(bars2, vals2):
-            ax2.text(b.get_x()+b.get_width()/2, b.get_height()+0.1,
-                     f"{v:.1f}", ha='center', va='bottom', color='white', fontsize=10, fontweight='bold')
-        ax2.set_ylabel("Pasos promedio", color='white')
-        ax2.set_title("Profundidad del recorrido", color='white', fontsize=10)
-        ax2.tick_params(colors='white'); ax2.spines[:].set_visible(False)
-        ax2.set_ylim(0, max(vals2)*1.3 if vals2 else 10)
-        plt.tight_layout(); st.pyplot(fig2); plt.close()
-
-    # Top estados de abandono
-    st.markdown("#### 🚨 Top estados previos al abandono")
-    df_abn = df_sim[df_sim["Estado final"]==ESTADO_ABANDONO]["Recorrido"]
-    previos_all = []
-    for r in df_abn:
-        pasos_ = [p.strip() for p in r.split("→")]
-        if len(pasos_) >= 2:
-            previos_all.append(pasos_[-2])
-    if previos_all:
-        top8    = Counter(previos_all).most_common(8)
-        top_lbl = [f"{k} – {NOMBRES.get(k,'')[:20]}" for k,_ in top8]
-        top_val = [v for _,v in top8]
-        fig3, ax3 = plt.subplots(figsize=(9, 3.5))
-        fig3.patch.set_facecolor('#01182E'); ax3.set_facecolor('#01182E')
-        cols3 = ["#C0392B" if i==0 else "#2E6DB4" for i in range(len(top8))]
-        bars3 = ax3.barh(top_lbl[::-1], top_val[::-1], color=cols3[::-1], height=0.6)
-        for b, v in zip(bars3, top_val[::-1]):
-            ax3.text(b.get_width()+0.3, b.get_y()+b.get_height()/2,
-                     str(v), va='center', color='white', fontsize=9, fontweight='bold')
-        ax3.set_xlabel("Abandonos", color='white')
-        ax3.tick_params(colors='white', labelsize=8); ax3.spines[:].set_visible(False)
-        ax3.set_title("Estado previo al abandono (top 8)", color='white', fontsize=10)
-        plt.tight_layout(); st.pyplot(fig3); plt.close()
-    else:
-        st.info("No se registraron abandonos en esta simulación.")
-
-    # Rutas más frecuentes
-    st.markdown("#### 🔁 Recorridos más frecuentes")
-    rf = df_sim["Recorrido"].value_counts().head(8).reset_index()
-    rf.columns = ["Recorrido","Frecuencia"]
-    st.dataframe(rf, use_container_width=True, hide_index=True)
-
-    # ── Diagnóstico ──────────────────────────────────────────────────────────
-    st.markdown("---")
-    st.markdown("### 🔧 Diagnóstico y mejora del abandono")
-    ec_d, ec_n_d = estado_critico(df_sim)
-
-    if ec_d is None:
-        st.success("No se detectaron abandonos en la simulación actual.")
-    else:
-        total_abnd     = (df_sim["Estado final"]==ESTADO_ABANDONO).sum()
-        pct_s_abnd     = ec_n_d/total_abnd*100 if total_abnd>0 else 0
-        pct_s_total    = ec_n_d/len(df_sim)*100
-
-        d1, d2, d3, d4 = st.columns(4)
-        d1.metric("🚨 Estado crítico",        ec_d)
-        d2.metric("📌 Nombre",                NOMBRES.get(ec_d,"—"))
-        d3.metric("❌ Abandonos asociados",    ec_n_d)
-        d4.metric("% sobre abandonos totales", f"{pct_s_abnd:.1f}%")
-
+        # Diagnosis
         st.markdown(f"""
-        <div class="diag-box">
-          <b>🔎 Diagnóstico principal</b><br><br>
-          El estado más crítico es <b>{ec_d} – {NOMBRES.get(ec_d,'')}</b>.<br>
-          <b>Descripción:</b> {DESCRIPCIONES.get(ec_d,'')}<br><br>
-          De los <b>{total_abnd}</b> usuarios que abandonaron, el <b>{pct_s_abnd:.1f}%</b>
-          ({ec_n_d} usuarios) lo hizo inmediatamente después de pasar por este estado.
-          Representa el <b>{pct_s_total:.1f}%</b> del total simulado.
+        <div class="card">
+          <h3>⚠️ Diagnóstico — Estado crítico</h3>
+          <div class="diag-row">
+            <span class="diag-label">Estado:</span>
+            <span class="diag-val">{crit_id} · {crit_name}</span>
+          </div>
+          <div class="diag-row">
+            <span class="diag-label">Tasa de abandono:</span>
+            <span class="diag-val" style="color:{BAD};">{crit_rate:.1f}%</span>
+            <span class="diag-badge">CRÍTICO</span>
+          </div>
+          <div class="diag-row">
+            <span class="diag-label">Usuarios perdidos:</span>
+            <span class="diag-val">{crit['abandon_flow']:,}</span>
+          </div>
+          <div class="diag-row">
+            <span class="diag-label">Flujo total saliente:</span>
+            <span class="diag-val">{crit['outflow']:,}</span>
+          </div>
+          <p style="font-size:.78rem;color:{FG_M};margin-top:.65rem;line-height:1.55;">
+            En el escenario <b>mejorado</b>, la probabilidad de abandono en
+            <b>S17 (Plan de negocio)</b> baja de
+            <b style="color:{BAD};">42 %</b> a <b style="color:{GOOD};">16 %</b>,
+            aumentando la conversión global en
+            <b style="color:{GOOD};">+{Δconv:.1f} puntos porcentuales</b>.
+          </p>
         </div>
         """, unsafe_allow_html=True)
 
-        if st.button("🔧 Generar recomendación ejecutiva", use_container_width=True):
-            st.session_state["rec_obj"] = recomendacion_edifica(ec_d, matriz_prob)
+    # ── Right column ──────────────────────────────────────────────────────────
+    with right:
+        # Heatmap
+        st.markdown(
+            '<div class="card"><h3>Mapa de calor — Matriz de transición (33 × 33)</h3>',
+            unsafe_allow_html=True,
+        )
+        render_img(
+            chart_heatmap(res_b),
+            "Probabilidades de transición (escenario base). "
+            "Filas = estado origen · Columnas = estado destino.",
+        )
+        st.markdown("</div>", unsafe_allow_html=True)
 
-        if "rec_obj" in st.session_state:
-            rec = st.session_state["rec_obj"]
-            st.markdown(f"""
-            <div class="rec-box">
-              <h4>📋 Propuesta de intervención — {rec['estado']} · {rec['nombre']}</h4>
-              <b>Probabilidad directa de abandono:</b> {rec['prob_abandono']:.2%}<br><br>
-              <b>🔍 Causa:</b> {rec['causa']}<br><br>
-              <b>🛠️ Mejora recomendada:</b> {rec['mejora']}<br><br>
-              <b>📐 Ajuste en la matriz:</b> {rec['accion']}<br><br>
-              <b>📈 KPI de validación:</b> {rec['kpi']}
-            </div>
-            """, unsafe_allow_html=True)
+        # Profiles
+        st.markdown('<div class="card"><h3>Resultados por perfil de usuario</h3>',
+                    unsafe_allow_html=True)
+        render_img(chart_profiles(res_b))
+        st.markdown("</div>", unsafe_allow_html=True)
 
-        # Escenario mejorado
-        st.markdown("---")
-        st.markdown("#### 📈 Escenario mejorado")
-        reduccion = st.slider("Reducción de P(abandono) desde el estado crítico",
-                              0.05, 0.60, 0.20, 0.05, format="%.2f")
+        # Comparison table
+        st.markdown(f"""
+        <div class="card">
+          <h3>Comparativa de escenarios</h3>
+          <table style="width:100%;font-size:.81rem;border-collapse:collapse;">
+            <thead>
+              <tr style="color:{FG_D};font-size:.7rem;text-transform:uppercase;
+                         letter-spacing:.05em;">
+                <th style="text-align:left;padding:4px 0;">Métrica</th>
+                <th style="text-align:right;padding:4px 8px;">Base</th>
+                <th style="text-align:right;padding:4px 8px;">Mejorado</th>
+                <th style="text-align:right;padding:4px 0;">Δ</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr style="border-top:1px solid {BORD};">
+                <td style="padding:5px 0;color:{FG_M};">Aceptados</td>
+                <td style="text-align:right;font-family:monospace;padding:5px 8px;">{oc_b["success"]:,}</td>
+                <td style="text-align:right;font-family:monospace;padding:5px 8px;">{oc_i["success"]:,}</td>
+                <td style="text-align:right;color:{GOOD};font-weight:600;">+{oc_i["success"]-oc_b["success"]:,}</td>
+              </tr>
+              <tr style="border-top:1px solid {BORD};">
+                <td style="padding:5px 0;color:{FG_M};">Abandonos</td>
+                <td style="text-align:right;font-family:monospace;padding:5px 8px;">{oc_b["abandon"]:,}</td>
+                <td style="text-align:right;font-family:monospace;padding:5px 8px;">{oc_i["abandon"]:,}</td>
+                <td style="text-align:right;color:{GOOD};font-weight:600;">−{oc_b["abandon"]-oc_i["abandon"]:,}</td>
+              </tr>
+              <tr style="border-top:1px solid {BORD};">
+                <td style="padding:5px 0;color:{FG_M};">Rechazados</td>
+                <td style="text-align:right;font-family:monospace;padding:5px 8px;">{oc_b["reject"]:,}</td>
+                <td style="text-align:right;font-family:monospace;padding:5px 8px;">{oc_i["reject"]:,}</td>
+                <td style="text-align:right;color:{FG_M};">{oc_i["reject"]-oc_b["reject"]:+,}</td>
+              </tr>
+              <tr style="border-top:1px solid {BORD};">
+                <td style="padding:5px 0;color:{FG_M};">Errores técn.</td>
+                <td style="text-align:right;font-family:monospace;padding:5px 8px;">{oc_b["error"]:,}</td>
+                <td style="text-align:right;font-family:monospace;padding:5px 8px;">{oc_i["error"]:,}</td>
+                <td style="text-align:right;color:{FG_M};">{oc_i["error"]-oc_b["error"]:+,}</td>
+              </tr>
+              <tr style="border-top:1px solid {BORD};">
+                <td style="padding:5px 0;color:{FG_M};">En proceso</td>
+                <td style="text-align:right;font-family:monospace;padding:5px 8px;">{oc_b["inprocess"]:,}</td>
+                <td style="text-align:right;font-family:monospace;padding:5px 8px;">{oc_i["inprocess"]:,}</td>
+                <td style="text-align:right;color:{FG_M};">{oc_i["inprocess"]-oc_b["inprocess"]:+,}</td>
+              </tr>
+              <tr style="border-top:2px solid {BORD};font-weight:700;">
+                <td style="padding:6px 0;">Tasa de éxito</td>
+                <td style="text-align:right;font-family:monospace;padding:6px 8px;">{conv_b:.2f}%</td>
+                <td style="text-align:right;font-family:monospace;padding:6px 8px;">{conv_i:.2f}%</td>
+                <td style="text-align:right;color:{GOOD};font-weight:700;">+{Δconv:.2f}pp</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        """, unsafe_allow_html=True)
 
-        if st.button("🚀 Simular escenario mejorado", use_container_width=True):
-            with st.spinner("Construyendo escenario mejorado..."):
-                mat_m = matriz_mejorada_fn(matriz_prob, ec_d, reduccion)
-                df_m  = simular_n(n_usuarios, mat_m, estado_inicial_sel, ESTADOS_FINALES, max_pasos)
-                st.session_state["df_sim_mejor"] = df_m
-            st.success("✅ Escenario mejorado generado correctamente.")
+# ══════════════════════════════════════════════════════════════════════════════
+#  TAB 2 — MATRIZ
+# ══════════════════════════════════════════════════════════════════════════════
+with tab2:
+    st.markdown(
+        '<div class="card"><h3>Matriz de transición estocástica — 33 × 33 estados</h3>',
+        unsafe_allow_html=True,
+    )
+    M_df = pd.DataFrame(
+        res_b["M"],
+        index  =[f"{s[0]} · {s[1]}" for s in STATES],
+        columns=[s[0] for s in STATES],
+    )
+    st.dataframe(
+        M_df.style
+            .background_gradient(cmap="Blues", vmin=0, vmax=1)
+            .format("{:.3f}"),
+        use_container_width=True, height=640,
+    )
+    st.markdown("</div>", unsafe_allow_html=True)
 
-        if "df_sim_mejor" in st.session_state:
-            st.markdown("#### ⚖️ Comparación: inicial vs mejorado")
-            df_m    = st.session_state["df_sim_mejor"]
-            pct_ini = df_sim["Resultado"].value_counts(normalize=True)*100
-            pct_mej = df_m["Resultado"].value_counts(normalize=True)*100
-            todos   = sorted(set(pct_ini.index)|set(pct_mej.index))
-            df_comp = pd.DataFrame({
-                "Resultado":    todos,
-                "Inicial (%)":  [round(pct_ini.get(r,0),2) for r in todos],
-                "Mejorado (%)": [round(pct_mej.get(r,0),2) for r in todos],
-                "Δ (pp)":       [round(pct_mej.get(r,0)-pct_ini.get(r,0),2) for r in todos],
+# ══════════════════════════════════════════════════════════════════════════════
+#  TAB 3 — ANÁLISIS DETALLADO
+# ══════════════════════════════════════════════════════════════════════════════
+with tab3:
+    a1, a2 = st.columns(2, gap="medium")
+
+    with a1:
+        st.markdown('<div class="card"><h3>Visitas por estado (top 20)</h3>',
+                    unsafe_allow_html=True)
+        vis_df = (
+            pd.DataFrame({
+                "Estado":           [f"{STATE_IDS[i]} · {STATE_NAMES[i]}"
+                                     for i in range(N_STATES)],
+                "Grupo":            [STATES[i][2] for i in range(N_STATES)],
+                "Visitas base":     res_b["visits"].tolist(),
+                "Visitas mejorado": res_i["visits"].tolist(),
             })
-            st.dataframe(df_comp, use_container_width=True, hide_index=True)
+            .sort_values("Visitas base", ascending=False)
+            .head(20)
+            .reset_index(drop=True)
+        )
+        st.dataframe(vis_df, use_container_width=True, height=420)
+        st.markdown("</div>", unsafe_allow_html=True)
 
-            fig_c, ax_c = plt.subplots(figsize=(8, 3.5))
-            fig_c.patch.set_facecolor('#01182E'); ax_c.set_facecolor('#01182E')
-            x = np.arange(len(todos)); w = 0.35
-            b1 = ax_c.bar(x-w/2, df_comp["Inicial (%)"],  w, label="Inicial",  color="#2E6DB4")
-            b2 = ax_c.bar(x+w/2, df_comp["Mejorado (%)"], w, label="Mejorado", color="#4AACE8")
-            for b in list(b1)+list(b2):
-                ax_c.text(b.get_x()+b.get_width()/2, b.get_height()+0.4,
-                          f"{b.get_height():.1f}%", ha='center', va='bottom',
-                          color='white', fontsize=8, fontweight='bold')
-            ax_c.set_xticks(x); ax_c.set_xticklabels(todos, color='white', fontsize=9)
-            ax_c.set_ylabel("Porcentaje (%)", color='white')
-            ax_c.tick_params(colors='white'); ax_c.spines[:].set_visible(False)
-            ax_c.legend(facecolor='#01182E', labelcolor='white', fontsize=8)
-            ax_c.set_title("Escenario inicial vs mejorado", color='white', fontsize=10)
-            plt.tight_layout(); st.pyplot(fig_c); plt.close()
-            st.info("Esta comparación permite validar si la mejora propuesta reduce el abandono e incrementa el éxito.")
+    with a2:
+        # Profile detail
+        st.markdown('<div class="card"><h3>Resultados por perfil — Detalle</h3>',
+                    unsafe_allow_html=True)
+        prof_rows = []
+        for pi, p in enumerate(PROFILES):
+            po    = res_b["profile_outcomes"][pi]
+            total = sum(po.values())
+            prof_rows.append({
+                "Perfil":     p[1],
+                "Aceptado":   po["success"],
+                "Abandono":   po["abandon"],
+                "Rechazado":  po["reject"],
+                "Error":      po["error"],
+                "En proceso": po["inprocess"],
+                "% Éxito":    f'{po["success"]/total*100:.1f}%' if total else "0%",
+            })
+        prof_df = pd.DataFrame(prof_rows)
+        st.dataframe(prof_df, use_container_width=True, height=230)
+        st.markdown("</div>", unsafe_allow_html=True)
 
-# ══════════════════════════════════════════════════════════════════════════════
-# ACCIONES RÁPIDAS  (diseño Simulacion Desing — datos reales)
-# ══════════════════════════════════════════════════════════════════════════════
-st.markdown("---")
-st.markdown("### ⚡ Acciones Rápidas")
-ac1, ac2, ac3, ac4 = st.columns(4)
+        # Export
+        st.markdown('<div class="card"><h3>Exportar resultados</h3>',
+                    unsafe_allow_html=True)
+        e1, e2 = st.columns(2)
+        with e1:
+            buf = io.BytesIO()
+            with pd.ExcelWriter(buf, engine="openpyxl") as writer:
+                vis_df.to_excel(writer,  sheet_name="Visitas",     index=False)
+                prof_df.to_excel(writer, sheet_name="Perfiles",    index=False)
+                M_df.to_excel(writer,    sheet_name="Matriz")
+                pd.DataFrame([
+                    {"Escenario": "Base",
+                     **{k.capitalize(): v for k, v in oc_b.items()},
+                     "Tasa_éxito_%": f"{conv_b:.2f}"},
+                    {"Escenario": "Mejorado",
+                     **{k.capitalize(): v for k, v in oc_i.items()},
+                     "Tasa_éxito_%": f"{conv_i:.2f}"},
+                ]).to_excel(writer, sheet_name="Comparativa", index=False)
+            buf.seek(0)
+            st.download_button(
+                "⬇ Descargar Excel", buf, "edifica_simulacion.xlsx",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                use_container_width=True,
+            )
+        with e2:
+            st.download_button(
+                "⬇ Descargar CSV", vis_df.to_csv(index=False),
+                "edifica_visitas.csv", "text/csv",
+                use_container_width=True,
+            )
+        st.markdown("</div>", unsafe_allow_html=True)
 
-with ac1:
-    if st.button("📥 Exportar a Excel", use_container_width=True):
-        output = io.BytesIO()
-        with pd.ExcelWriter(output, engine='openpyxl') as writer:
-            st.session_state["df_sim"].to_excel(writer, index=False, sheet_name="Simulación")
-            df_estados.to_excel(writer, index=False, sheet_name="Estados")
-            df_recorridos_base.to_excel(writer, index=False, sheet_name="Recorridos")
-        output.seek(0)
-        st.download_button("⬇️ Descargar Excel", data=output,
-                           file_name="simulacion_colombia_comparte.xlsx",
-                           mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-
-with ac2:
-    if st.button("📄 Exportar a CSV", use_container_width=True):
-        csv = st.session_state["df_sim"].to_csv(index=False)
-        st.download_button("⬇️ Descargar CSV", data=csv,
-                           file_name="simulacion_colombia_comparte.csv",
-                           mime="text/csv")
-
-with ac3:
-    if st.button("♿ Modo Accesibilidad", use_container_width=True):
-        st.success("Modo alto contraste activado.")
-
-with ac4:
-    if st.button("🔗 Compartir Resultados", use_container_width=True):
-        st.success("Enlace copiado al portapapeles (simulado).")
-
-st.caption("Dashboard Colombia Comparte · Universidad Santo Tomás · Seccional Tunja · 2026")
+# ── Footer ─────────────────────────────────────────────────────────────────────
+st.markdown(f"""
+<div style="text-align:center;margin-top:2rem;padding-top:1rem;
+     border-top:1px solid {BORD};font-size:.7rem;color:{FG_D};">
+  Dashboard Colombia Comparte · Programa EDIFICA ·
+  Universidad Santo Tomás · Seccional Tunja · 2026
+</div>
+""", unsafe_allow_html=True)
